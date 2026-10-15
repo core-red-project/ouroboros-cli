@@ -1,0 +1,105 @@
+// ═══════════════════════════════════════════════════════════════
+// Signed integers of any size: a sign and a natural magnitude
+// (`bigint`). Zero is `Pos(⊘)`; `Neg` never holds a zero magnitude.
+// Division truncates toward zero and the remainder takes the dividend's
+// sign, exactly like the machine `÷` and `⌗`.
+// ═══════════════════════════════════════════════════════════════
+
+⟲bigint
+
+Z ≔ { Neg(List ▷ ⟁) ⟢ Pos(List ▷ ⟁) }
+
+λzero(u: ∅): Z →⟳ Pos(⊘)
+
+// Canonical constructor: a zero magnitude is never negative.
+λmake(negative: ○, mag: List ▷ ⟁): Z → ⟡ (negative ∧ isZero(mag) ≡ ◎) {
+  ◉ → Neg(mag) ⟢
+  ◎ → Pos(mag)
+}
+
+λmagnitude(z: Z): List ▷ ⟁ →⟳ ⟡ z {
+  Neg(m) → m ⟢
+  Pos(m) → m
+}
+
+λisNegative(z: Z): ○ →⟳ ⟡ z {
+  Neg(m) → ◉ ⟢
+  Pos(m) → ◎
+}
+
+// From a machine Int, including the negatives.
+λfromMachine(n: ⟁): Z →⟳ ⟡ (n < 0) {
+  ◉ → ⟡ (n ≡ 0 ☠︎ 9223372036854775807 ☠︎ 1) {
+    ◉ → Neg(fromStr("9223372036854775808")) ⟢
+    ◎ → make(◉, fromInt(0 ☠︎ n))
+  } ⟢
+  ◎ → Pos(fromInt(n))
+}
+
+// Back to a machine Int when it fits.
+λtoMachine(z: Z): Optional ▷ ⟁ →⟳ ⟡ toInt(magnitude(z)) {
+  ⧫(v) → ⧫(⟡ isNegative(z) {
+    ◉ → 0 ☠︎ v ⟢
+    ◎ → v
+  }) ⟢
+  ⦰ → ⦰
+}
+
+λneg(z: Z): Z →⟳ make(isNegative(z) ≡ ◎, magnitude(z))
+
+λabs(z: Z): Z →⟳ Pos(magnitude(z))
+
+λsign(z: Z): ⟁ →⟳ ⟡ isZero(magnitude(z)) {
+  ◉ → 0 ⟢
+  ◎ → ⟡ isNegative(z) {
+    ◉ → 0 ☠︎ 1 ⟢
+    ◎ → 1
+  }
+}
+
+// −1, 0 or 1.
+λcmp(a: Z, b: Z): ⟁ →⟳ ⟡ (isNegative(a) ≡ isNegative(b)) {
+  ◉ → ⟡ isNegative(a) {
+    ◉ → compare(magnitude(b), magnitude(a)) ⟢
+    ◎ → compare(magnitude(a), magnitude(b))
+  } ⟢
+  ◎ → ⟡ isNegative(a) {
+    ◉ → 0 ☠︎ 1 ⟢
+    ◎ → 1
+  }
+}
+
+λplus(a: Z, b: Z): Z →⟳ ⟡ (isNegative(a) ≡ isNegative(b)) {
+  ◉ → make(isNegative(a), add(magnitude(a), magnitude(b))) ⟢
+  ◎ → ⟡ (compare(magnitude(a), magnitude(b)) < 0) {
+    ◉ → make(isNegative(b), sub(magnitude(b), magnitude(a))) ⟢
+    ◎ → make(isNegative(a), sub(magnitude(a), magnitude(b)))
+  }
+}
+
+λsubtract(a: Z, b: Z): Z →⟳ plus(a, neg(b))
+
+λmultiply(a: Z, b: Z): Z →⟳ make(isNegative(a) ≠ isNegative(b), mul(magnitude(a), magnitude(b)))
+
+// `⁝(quotient, ⁝(remainder, ⊘))`; DivisionByZero when b is zero.
+λdivide(a: Z, b: Z): List ▷ Z →⟳ ⟡ divmod(magnitude(a), magnitude(b)) {
+  ⁝(q, ⁝(r, rest)) → ⁝(make(isNegative(a) ≠ isNegative(b), q), ⁝(make(isNegative(a), r), ⊘)) ⟢
+  _ → ⊘
+}
+
+λpower(a: Z, n: ⟁): Z →⟳ make(isNegative(a) ∧ n ⌗ 2 ≡ 1, pow(magnitude(a), n))
+
+λshow(z: Z): ⌘ →⟳ ⟡ isNegative(z) {
+  ◉ → "-" ✚ toStr(magnitude(z)) ⟢
+  ◎ → toStr(magnitude(z))
+}
+
+// Optional leading `-` or `+`, then digits.
+λparse(s: ⌘): Z →⟳ ⟡ ⊢("-")(s) {
+  ◉ → make(◉, fromStr(⊏(1)(⍴(s) ☠︎ 1)(s))) ⟢
+  ◎ → ⟡ ⊢("+")(s) {
+    ◉ → Pos(fromStr(⊏(1)(⍴(s) ☠︎ 1)(s))) ⟢
+    ◎ → Pos(fromStr(s))
+  }
+}
+❧

@@ -1,0 +1,25 @@
+⟲support
+⟲prelude
+⟲sexpr
+
+λcount(forms: List ▷ Sx): ⟁ → ⟡ forms {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → 1 ✚ count(tl)
+}
+
+λone(text: ⌘): Sx → ⟡ parseProgram(text) {
+  ⁝(x, ⊘) → x ⟢
+  _ → ☄ Failure("assertion", "expected exactly one tree in: " ✚ text)
+}
+
+c1 ≔ expect(render(one("(add 1 (mul 2 3))")), "(add 1 (mul 2 3))", "render inverts parse")
+c2 ≔ expect(render(one("  ( a\n\tb ) ")), "(a b)", "whitespace is insignificant")
+c3 ≔ expect(render(one("(a ; comment (ignored\n b)")), "(a b)", "comments run to the end of the line")
+c4 ≔ expect(count(parseProgram("(a) (b) c")), 3, "several top-level trees")
+c5 ≔ expect(count(parseProgram("")), 0, "an empty file has no trees")
+c6 ≔ expect(depth(one("(a (b (c)))")), 3, "depth counts nesting")
+c7 ≔ expect(nodeCount(one("(a (b) (c d))")), 3, "forms are nodes")
+c8 ≔ expect(leafCount(one("(a (b) (c d))")), 4, "atoms are leaves")
+c9 ≔ expect(raisedTag(λ(u) → parseProgram("(a (b)")), "syntax", "missing close paren")
+c10 ≔ expect(raisedTag(λ(u) → parseProgram("a)")), "syntax", "stray close paren")
+❧

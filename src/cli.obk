@@ -1,0 +1,213 @@
+// ═══════════════════════════════════════════════════════════════
+// The command-line contract: global options, help, completions, the
+// manual page, colors and "did you mean".
+// ═══════════════════════════════════════════════════════════════
+
+⟲prelude
+
+☈ Usage(⌘)
+
+CommandInfo ≔ { name: ⌘ ⟢ usage: ⌘ ⟢ summary: ⌘ }
+
+λcommands(u: ∅): List ▷ CommandInfo →⟳ ⁝(CommandInfo { name: "factorial" ⟢ usage: "factorial N" ⟢ summary: "N! as an integer of any size (N ≤ 5000)" }, ⁝(CommandInfo { name: "fibonacci" ⟢ usage: "fibonacci N" ⟢ summary: "the Nth Fibonacci number (N ≤ 20000)" }, ⁝(CommandInfo { name: "hanoi" ⟢ usage: "hanoi N [--count]" ⟢ summary: "the moves of an N-disk tower (N ≤ 20), or 2^N − 1 with --count" }, ⁝(CommandInfo { name: "eval" ⟢ usage: "eval FILE" ⟢ summary: "evaluate a tree program; \"-\" reads standard input" }, ⁝(CommandInfo { name: "tree" ⟢ usage: "tree FILE" ⟢ summary: "outline a tree and report forms, nodes, leaves and depth" }, ⁝(CommandInfo { name: "completions" ⟢ usage: "completions SHELL" ⟢ summary: "print a completion script (bash, zsh, fish, powershell)" }, ⁝(CommandInfo { name: "help" ⟢ usage: "help" ⟢ summary: "print this text" }, ⁝(CommandInfo { name: "version" ⟢ usage: "version" ⟢ summary: "print the version" }, ⊘))))))))
+
+λcommandNames(cs: List ▷ CommandInfo): List ▷ ⌘ → ⟡ cs {
+  ⊘ → ⊘ ⟢
+  ⁝(c, tl) → ⁝(c.name, commandNames(tl))
+}
+
+// ── options ───────────────────────────────────────────────────
+
+Options ≔ { quiet: ○ ⟢ verbose: ○ ⟢ json: ○ ⟢ noColor: ○ ⟢ help: ○ ⟢ version: ○ ⟢ rest: List ▷ ⌘ }
+
+// A negative number is an argument, not an option.
+λisNegativeNumber(a: ⌘): ○ →⟳ ⟡ (⊢("-")(a) ∧ ⍴(a) > 1) {
+  ◉ → ⌯(⊏(1)(1)(a)) ≥ 48 ∧ ⌯(⊏(1)(1)(a)) ≤ 57 ⟢
+  ◎ → ◎
+}
+
+// Global options may come before or after the command; everything else
+// is left, in order, for the command.
+λscan(args: List ▷ ⌘, o: Options): Options → ⟡ args {
+  ⊘ → Options { quiet: o.quiet ⟢ verbose: o.verbose ⟢ json: o.json ⟢ noColor: o.noColor ⟢ help: o.help ⟢ version: o.version ⟢ rest: reverse(o.rest) } ⟢
+  ⁝(a, tl) → ⟡ (a ≡ "-q" ∨ a ≡ "--quiet") {
+    ◉ → scan(tl, o.{ quiet: ◉ }) ⟢
+    ◎ → ⟡ (a ≡ "-v" ∨ a ≡ "--verbose") {
+      ◉ → scan(tl, o.{ verbose: ◉ }) ⟢
+      ◎ → ⟡ (a ≡ "--json") {
+        ◉ → scan(tl, o.{ json: ◉ }) ⟢
+        ◎ → ⟡ (a ≡ "--no-color") {
+          ◉ → scan(tl, o.{ noColor: ◉ }) ⟢
+          ◎ → ⟡ (a ≡ "-h" ∨ a ≡ "--help") {
+            ◉ → scan(tl, o.{ help: ◉ }) ⟢
+            ◎ → ⟡ (a ≡ "-V" ∨ a ≡ "--version") {
+              ◉ → scan(tl, o.{ version: ◉ }) ⟢
+              ◎ → scan(tl, o.{ rest: ⁝(a, o.rest) })
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+λparseOptions(args: List ▷ ⌘): Options →⟳ scan(args, Options { quiet: ◎ ⟢ verbose: ◎ ⟢ json: ◎ ⟢ noColor: ◎ ⟢ help: ◎ ⟢ version: ◎ ⟢ rest: ⊘ })
+
+// ── color ─────────────────────────────────────────────────────
+
+// Color only on a terminal, never when NO_COLOR is set or --no-color given.
+λcolorEnabled(o: Options): ○ →⟳ o.noColor ≡ ◎ ∧ ⌁⍰⌖(∅) ∧ noColorUnset(∅)
+
+λnoColorUnset(u: ∅): ○ → ⟡ ⌁↓⎈("NO_COLOR") {
+  ⧫(v) → ⍴(v) ≡ 0 ⟢
+  ⦰ → ◉
+}
+
+λpaint(on: ○, code: ⌘, s: ⌘): ⌘ → ⟡ on {
+  ◉ → "\u{1B}[" ✚ code ✚ "m" ✚ s ✚ "\u{1B}[0m" ⟢
+  ◎ → s
+}
+
+λbold(on: ○, s: ⌘): ⌘ →⟳ paint(on, "1", s)
+
+λcyan(on: ○, s: ⌘): ⌘ →⟳ paint(on, "36", s)
+
+λyellow(on: ○, s: ⌘): ⌘ →⟳ paint(on, "33", s)
+
+λdim(on: ○, s: ⌘): ⌘ →⟳ paint(on, "2", s)
+
+// ── help ──────────────────────────────────────────────────────
+
+λpad(s: ⌘, width: ⟁): ⌘ → ⟡ (⍴(s) ≥ width) {
+  ◉ → s ⟢
+  ◎ → pad(s ✚ " ", width)
+}
+
+λcommandLines(on: ○, cs: List ▷ CommandInfo): ⌘ → ⟡ cs {
+  ⊘ → "" ⟢
+  ⁝(c, tl) → "  " ✚ cyan(on, pad(c.usage, 20)) ✚ c.summary ✚ "\n" ✚ commandLines(on, tl)
+}
+
+λexample(on: ○, line: ⌘, note: ⌘): ⌘ → "  " ✚ pad(line, 46) ✚ dim(on, "# " ✚ note) ✚ "\n"
+
+λhelpText(on: ○): ⌘ →⟳ "ouroboros — a recursive CLI written in Obfusku.\n\n" ✚ bold(on, "USAGE") ✚ "\n  ouroboros <command> [args] [options]\n\n" ✚ bold(on, "COMMANDS") ✚ "\n" ✚ commandLines(on, commands(∅)) ✚ "\n" ✚ bold(on, "OPTIONS") ✚ "\n" ✚ "  " ✚ yellow(on, "-h, --help") ✚ "         print this text\n" ✚ "  " ✚ yellow(on, "-V, --version") ✚ "      print the version\n" ✚ "  " ✚ yellow(on, "-q, --quiet") ✚ "        print nothing but errors\n" ✚ "  " ✚ yellow(on, "-v, --verbose") ✚ "      explain what is being done, on standard error\n" ✚ "  " ✚ yellow(on, "    --json") ✚ "         machine-readable output on standard output\n" ✚ "  " ✚ yellow(on, "    --no-color") ✚ "     no color (also NO_COLOR; off when not a terminal)\n" ✚ "  " ✚ yellow(on, "    --count") ✚ "        hanoi: the number of moves instead of the moves\n\n" ✚ bold(on, "EXAMPLES") ✚ "\n" ✚ example(on, "ouroboros factorial 30", "30! exactly") ✚ example(on, "ouroboros hanoi 64 --count", "2^64 − 1 moves, as a number") ✚ example(on, "ouroboros eval examples/factorial.tree", "run a tree program") ✚ example(on, "ouroboros tree examples/shape.tree --json", "measure a tree, as JSON") ✚ example(on, "echo '(add 1 2)' | ouroboros eval -", "read the program from stdin") ✚ "\n" ✚ bold(on, "EXIT STATUS") ✚ "\n  0 success · 1 failure · 2 usage error\n"
+
+λversionText(u: ∅): ⌘ →⟳ "ouroboros 0.1.0"
+
+// ── completions ───────────────────────────────────────────────
+
+λjoinSpaced(xs: List ▷ ⌘): ⌘ → ⟡ xs {
+  ⊘ → "" ⟢
+  ⁝(h, tl) → ⟡ tl {
+    ⊘ → h ⟢
+    _ → h ✚ " " ✚ joinSpaced(tl)
+  }
+}
+
+λoptionWords(u: ∅): ⌘ → "-h --help -V --version -q --quiet -v --verbose --json --no-color --count"
+
+λshells(u: ∅): ⌘ → "bash zsh fish powershell"
+
+λbashScript(u: ∅): ⌘ → "_ouroboros() {\n  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n  if [ \"$COMP_CWORD\" -eq 1 ]; then\n    COMPREPLY=( $(compgen -W \"" ✚ joinSpaced(commandNames(commands(∅))) ✚ " " ✚ optionWords(∅) ✚ "\" -- \"$cur\") )\n  elif [ \"${COMP_WORDS[1]}\" = completions ]; then\n    COMPREPLY=( $(compgen -W \"" ✚ shells(∅) ✚ "\" -- \"$cur\") )\n  else\n    COMPREPLY=( $(compgen -f -W \"" ✚ optionWords(∅) ✚ "\" -- \"$cur\") )\n  fi\n}\ncomplete -o filenames -F _ouroboros ouroboros\n"
+
+λzshScript(u: ∅): ⌘ → "#compdef ouroboros\n_ouroboros() {\n  if (( CURRENT == 2 )); then\n    compadd " ✚ joinSpaced(commandNames(commands(∅))) ✚ " " ✚ optionWords(∅) ✚ "\n  elif [[ $words[2] == completions ]]; then\n    compadd " ✚ shells(∅) ✚ "\n  else\n    _files\n  fi\n}\n_ouroboros \"$@\"\n"
+
+λfishLines(names: List ▷ ⌘): ⌘ → ⟡ names {
+  ⊘ → "" ⟢
+  ⁝(n, tl) → "complete -c ouroboros -n __fish_use_subcommand -a " ✚ n ✚ "\n" ✚ fishLines(tl)
+}
+
+λfishScript(u: ∅): ⌘ → fishLines(commandNames(commands(∅))) ✚ "complete -c ouroboros -n '__fish_seen_subcommand_from completions' -a '" ✚ shells(∅) ✚ "'\ncomplete -c ouroboros -l help\ncomplete -c ouroboros -l version\ncomplete -c ouroboros -l quiet\ncomplete -c ouroboros -l verbose\ncomplete -c ouroboros -l json\ncomplete -c ouroboros -l no-color\ncomplete -c ouroboros -l count\n"
+
+λpowershellScript(u: ∅): ⌘ → "Register-ArgumentCompleter -Native -CommandName ouroboros -ScriptBlock {\n  param($wordToComplete, $commandAst, $cursorPosition)\n  $words = $commandAst.CommandElements | ForEach-Object { $_.ToString() }\n  $candidates = if ($words.Count -le 2) { '" ✚ joinSpaced(commandNames(commands(∅))) ✚ " " ✚ optionWords(∅) ✚ "' -split ' ' } elseif ($words[1] -eq 'completions') { '" ✚ shells(∅) ✚ "' -split ' ' } else { '" ✚ optionWords(∅) ✚ "' -split ' ' }\n  $candidates | Where-Object { $_ -like \"$wordToComplete*\" } | ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }\n}\n"
+
+// The script for `shell`; Usage for an unknown one.
+λcompletionScript(shell: ⌘): ⌘ →⟳ ⟡ (shell ≡ "bash") {
+  ◉ → bashScript(∅) ⟢
+  ◎ → ⟡ (shell ≡ "zsh") {
+    ◉ → zshScript(∅) ⟢
+    ◎ → ⟡ (shell ≡ "fish") {
+      ◉ → fishScript(∅) ⟢
+      ◎ → ⟡ (shell ≡ "powershell") {
+        ◉ → powershellScript(∅) ⟢
+        ◎ → ☄ Usage("unsupported shell '" ✚ shell ✚ "' (expected " ✚ joinSpaced(⁝("bash", ⁝("zsh", ⁝("fish", ⁝("powershell", ⊘))))) ✚ ")")
+      }
+    }
+  }
+}
+
+// ── manual page (hidden: `ouroboros man`) ─────────────────────
+
+λmanLines(cs: List ▷ CommandInfo): ⌘ → ⟡ cs {
+  ⊘ → "" ⟢
+  ⁝(c, tl) → ".TP\n.B " ✚ c.usage ✚ "\n" ✚ c.summary ✚ "\n" ✚ manLines(tl)
+}
+
+λmanPage(u: ∅): ⌘ →⟳ ".TH OUROBOROS 1\n" ✚ ".SH NAME\nouroboros \\- a recursive CLI written in Obfusku\n" ✚ ".SH SYNOPSIS\n.B ouroboros\n<command> [args] [options]\n" ✚ ".SH COMMANDS\n" ✚ manLines(commands(∅)) ✚ ".SH OPTIONS\n.TP\n.B \\-h, \\-\\-help\nprint the usage\n.TP\n.B \\-V, \\-\\-version\nprint the version\n.TP\n.B \\-q, \\-\\-quiet\nprint nothing but errors\n.TP\n.B \\-v, \\-\\-verbose\nexplain on standard error\n.TP\n.B \\-\\-json\nmachine-readable output\n.TP\n.B \\-\\-no\\-color\ndisable color\n" ✚ ".SH EXIT STATUS\n0 success, 1 failure, 2 usage error\n"
+
+// ── "did you mean" ────────────────────────────────────────────
+
+λminOf(a: ⟁, b: ⟁): ⟁ → ⟡ (a < b) {
+  ◉ → a ⟢
+  ◎ → b
+}
+
+λrange(n: ⟁): List ▷ ⟁ → ⟡ (n < 0) {
+  ◉ → ⊘ ⟢
+  ◎ → append(range(n ☠︎ 1), ⁝(n, ⊘))
+}
+
+λlastOf(xs: List ▷ ⟁): ⟁ → ⟡ xs {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → ⟡ tl {
+    ⊘ → h ⟢
+    _ → lastOf(tl)
+  }
+}
+
+// One row of the edit-distance table for character `ca` of the first word.
+λrowStep(ca: ⌘, bs: List ▷ ⌘, prev: List ▷ ⟁, left: ⟁): List ▷ ⟁ → ⟡ bs {
+  ⊘ → ⊘ ⟢
+  ⁝(cb, bt) → ⟡ prev {
+    ⁝(diag, ⁝(up, rp)) → (
+      cost ≔ ⟡ (ca ≡ cb) {
+        ◉ → 0 ⟢
+        ◎ → 1
+      }
+      cur ≔ minOf(minOf(diag ✚ cost, up ✚ 1), left ✚ 1)
+      ⁝(cur, rowStep(ca, bt, ⁝(up, rp), cur))
+    ) ⟢
+    _ → ⊘
+  }
+}
+
+λdistanceRows(as: List ▷ ⌘, bs: List ▷ ⌘, prev: List ▷ ⟁): ⟁ → ⟡ as {
+  ⊘ → lastOf(prev) ⟢
+  ⁝(ca, at) → ⟡ prev {
+    ⁝(first, rest) → (
+      head ≔ first ✚ 1
+      distanceRows(at, bs, ⁝(head, rowStep(ca, bs, prev, head)))
+    ) ⟢
+    ⊘ → 0
+  }
+}
+
+λdistance(a: ⌘, b: ⌘): ⟁ → distanceRows(⍂(a), ⍂(b), range(⍴(b)))
+
+// The known name closest to `word`, if it is close enough to be a typo.
+λclosest(word: ⌘, names: List ▷ ⌘, best: Optional ▷ ⌘, bestDistance: ⟁): Optional ▷ ⌘ → ⟡ names {
+  ⊘ → best ⟢
+  ⁝(n, tl) → (
+    d ≔ distance(word, n)
+    ⟡ (d < bestDistance) {
+      ◉ → closest(word, tl, ⧫(n), d) ⟢
+      ◎ → closest(word, tl, best, bestDistance)
+    }
+  )
+}
+
+λsuggestion(word: ⌘): ⌘ →⟳ ⟡ closest(word, commandNames(commands(∅)), ⦰, 3) {
+  ⧫(n) → "; did you mean '" ✚ n ✚ "'?" ⟢
+  ⦰ → ""
+}
+❧

@@ -1,0 +1,43 @@
+⟲support
+⟲cli
+
+// Each marker appears, and after the one before it.
+λinOrder(text: ⌘, markers: List ▷ ⌘): ○ → after(text, markers, 0)
+
+λafter(text: ⌘, markers: List ▷ ⌘, from: ⟁): ○ → ⟡ markers {
+  ⊘ → ◉ ⟢
+  ⁝(m, tl) → ⟡ ⍸(m)(⊏(from)(⍴(text))(text)) {
+    ⧫(i) → after(text, tl, from ✚ i ✚ 1) ⟢
+    ⦰ → ◎
+  }
+}
+
+λopts(args: List ▷ ⌘): Options → parseOptions(args)
+
+o1 ≔ opts(⁝("--json", ⁝("factorial", ⁝("5", ⁝("-q", ⊘)))))
+a1 ≔ expect(o1.json, ◉, "--json before the command")
+a2 ≔ expect(o1.quiet, ◉, "-q after the arguments")
+a3 ≔ expect(o1.rest, ⁝("factorial", ⁝("5", ⊘)), "options are removed, the rest keeps its order")
+o2 ≔ opts(⁝("hanoi", ⁝("3", ⁝("--count", ⊘))))
+b1 ≔ expect(o2.json, ◎, "no --json")
+b2 ≔ expect(o2.rest, ⁝("hanoi", ⁝("3", ⁝("--count", ⊘))), "command flags stay for the command")
+o3 ≔ opts(⁝("-v", ⁝("-V", ⁝("-h", ⊘))))
+c1 ≔ expect(o3.verbose, ◉, "-v is verbose")
+c2 ≔ expect(o3.version, ◉, "-V is version")
+c3 ≔ expect(o3.help, ◉, "-h is help")
+d1 ≔ expect(isNegativeNumber("-5"), ◉, "a negative number is an argument")
+d2 ≔ expect(isNegativeNumber("-x"), ◎, "a short flag is not a number")
+d3 ≔ expect(isNegativeNumber("5"), ◎, "no sign, no negative")
+e1 ≔ expect(suggestion("fctorial"), "; did you mean 'factorial'?", "a dropped letter")
+e2 ≔ expect(suggestion("hanio"), "; did you mean 'hanoi'?", "a transposition-sized typo")
+e3 ≔ expect(suggestion("zzzzzz"), "", "nothing close, no guess")
+f1 ≔ expect(∋("completions bash")(completionScript("bash")), ◎, "the script is not the command text")
+f2 ≔ expect(∋("complete -o filenames -F _ouroboros ouroboros")(completionScript("bash")), ◉, "bash registers the function")
+f3 ≔ expect(∋("#compdef ouroboros")(completionScript("zsh")), ◉, "zsh header")
+f4 ≔ expect(∋("complete -c ouroboros")(completionScript("fish")), ◉, "fish completions")
+f5 ≔ expect(∋("Register-ArgumentCompleter")(completionScript("powershell")), ◉, "powershell completer")
+f6 ≔ expect(raisedTag(λ(u) → completionScript("tcsh")), "other", "an unknown shell is a usage error, not a script")
+h1 ≔ expect(∋("\u{1B}[")(helpText(◎)), ◎, "no escape codes when color is off")
+h2 ≔ expect(∋("\u{1B}[1m")(helpText(◉)), ◉, "headers are bold when color is on")
+h3 ≔ expect(inOrder(helpText(◎), ⁝("USAGE", ⁝("COMMANDS", ⁝("OPTIONS", ⁝("EXAMPLES", ⊘))))), ◉, "sections appear in the standard order")
+❧

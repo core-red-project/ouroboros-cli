@@ -1,0 +1,2 @@
+; a tree that calls a function nobody defined
+(nope 1 2)

@@ -1,0 +1,13 @@
+// Small list helpers shared by the other modules.
+
+λreverseOnto(a: List ▷ t, acc: List ▷ t): List ▷ t →⟳ ⟡ a {
+  ⊘ → acc ⟢
+  ⁝(h, tl) → reverseOnto(tl, ⁝(h, acc))
+}
+
+λreverse(a: List ▷ t): List ▷ t →⟳ reverseOnto(a, ⊘)
+λappend(a: List ▷ t, b: List ▷ t): List ▷ t →⟳ ⟡ a {
+  ⊘ → b ⟢
+  ⁝(h, tl) → ⁝(h, append(tl, b))
+}
+❧

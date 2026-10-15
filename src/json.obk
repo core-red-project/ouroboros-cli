@@ -1,0 +1,72 @@
+// JSON text for `--json` output: strings are escaped, nothing else is
+// ever built from unescaped input.
+
+⟲prelude
+
+λhexDigit(n: ⟁): ⌘ → ⟡ (n < 10) {
+  ◉ → ⍕(n) ⟢
+  ◎ → ⟡ (n ≡ 10) {
+    ◉ → "a" ⟢
+    ◎ → ⟡ (n ≡ 11) {
+      ◉ → "b" ⟢
+      ◎ → ⟡ (n ≡ 12) {
+        ◉ → "c" ⟢
+        ◎ → ⟡ (n ≡ 13) {
+          ◉ → "d" ⟢
+          ◎ → ⟡ (n ≡ 14) {
+            ◉ → "e" ⟢
+            ◎ → "f"
+          }
+        }
+      }
+    }
+  }
+}
+
+// `\u00XX` for a control character.
+λunicodeEscape(code: ⟁): ⌘ → "\\u00" ✚ hexDigit(code ÷ 16) ✚ hexDigit(code ⌗ 16)
+
+λescapeChar(c: ⌘): ⌘ → ⟡ (c ≡ "\"") {
+  ◉ → "\\\"" ⟢
+  ◎ → ⟡ (c ≡ "\\") {
+    ◉ → "\\\\" ⟢
+    ◎ → ⟡ (c ≡ "\n") {
+      ◉ → "\\n" ⟢
+      ◎ → ⟡ (c ≡ "\t") {
+        ◉ → "\\t" ⟢
+        ◎ → ⟡ (c ≡ "\r") {
+          ◉ → "\\r" ⟢
+          ◎ → ⟡ (⌯(c) < 32) {
+            ◉ → unicodeEscape(⌯(c)) ⟢
+            ◎ → c
+          }
+        }
+      }
+    }
+  }
+}
+
+λescapeAll(cs: List ▷ ⌘): ⌘ → ⟡ cs {
+  ⊘ → "" ⟢
+  ⁝(c, tl) → escapeChar(c) ✚ escapeAll(tl)
+}
+
+// A quoted, escaped JSON string.
+λstring(s: ⌘): ⌘ →⟳ "\"" ✚ escapeAll(⍂(s)) ✚ "\""
+
+// `[a,b,c]` of already-built JSON values.
+λarray(items: List ▷ ⌘): ⌘ →⟳ "[" ✚ joinWith(",", items) ✚ "]"
+
+λjoinWith(sep: ⌘, items: List ▷ ⌘): ⌘ → ⟡ items {
+  ⊘ → "" ⟢
+  ⁝(h, tl) → ⟡ tl {
+    ⊘ → h ⟢
+    _ → h ✚ sep ✚ joinWith(sep, tl)
+  }
+}
+
+// `"key":value` members.
+λmember(key: ⌘, value: ⌘): ⌘ →⟳ string(key) ✚ ":" ✚ value
+
+λobject(members: List ▷ ⌘): ⌘ →⟳ "{" ✚ joinWith(",", members) ✚ "}"
+❧

@@ -1,0 +1,9 @@
+⟲support
+⟲bigint
+⟲hanoi
+
+c1 ≔ expect(toStr(count(0)), "0", "no disks, no moves")
+c2 ≔ expect(toStr(count(1)), "1", "one disk")
+c3 ≔ expect(toStr(count(10)), "1023", "2^10 - 1")
+c4 ≔ expect(toStr(count(64)), "18446744073709551615", "2^64 - 1 needs more than a machine Int")
+❧

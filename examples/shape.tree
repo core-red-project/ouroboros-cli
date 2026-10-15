@@ -1,0 +1,4 @@
+(project ouroboros
+  (module bigint (exports from-int add sub mul pow to-str))
+  (module sexpr  (exports parse render outline))
+  (module main   (commands factorial fibonacci hanoi eval tree)))

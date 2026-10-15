@@ -1,0 +1,9 @@
+; Recursion inside the evaluated language, on numbers of any size.
+(def fact (n)
+  (if (eq n 0)
+      1
+      (mul n (fact (sub n 1)))))
+
+(fact 5)
+(fact 30)
+(pow 2 100)

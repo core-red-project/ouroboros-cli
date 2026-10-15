@@ -1,0 +1,22 @@
+// Assertions for the test files: a failed one raises, which fails the file.
+
+λexpect(actual: t, wanted: t, what: ⌘): ∅ →⟳ ⟡ (actual ≡ wanted) {
+  ◉ → ∅ ⟢
+  ◎ → ☄ Failure("assertion", what ✚ ": expected " ✚ ⍕(wanted) ✚ ", got " ✚ ⍕(actual))
+}
+
+λexpectTrue(condition: ○, what: ⌘): ∅ →⟳ ⟡ condition {
+  ◉ → ∅ ⟢
+  ◎ → ☄ Failure("assertion", what ✚ ": expected a true condition")
+}
+
+// Runs `thunk` and returns the failure tag it raised, or "" if none.
+λraisedTag(thunk: ∅ → t): ⌘ →⟳ ☊ (
+  value ≔ thunk(∅)
+  ""
+) λ(e) → ⟡ e {
+  Failure(tag, m) → tag ⟢
+  DivisionByZero → "DivisionByZero" ⟢
+  _ → "other"
+}
+❧

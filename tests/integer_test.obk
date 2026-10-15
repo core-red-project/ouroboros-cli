@@ -1,0 +1,23 @@
+⟲support
+⟲bigint
+⟲integer
+
+c1 ≔ expect(show(parse("-5")), "-5", "negative literal")
+c2 ≔ expect(show(parse("0")), "0", "zero")
+c3 ≔ expect(show(parse("-0")), "0", "negative zero is zero")
+c4 ≔ expect(show(plus(parse("-5"), parse("12"))), "7", "mixed signs")
+c5 ≔ expect(show(plus(parse("-5"), parse("-12"))), "-17", "both negative")
+c6 ≔ expect(show(subtract(parse("5"), parse("12"))), "-7", "below zero")
+c7 ≔ expect(show(multiply(parse("-123456789012345678901234567890"), parse("98765432109876543210"))), "-12193263113702179522496570642237463801111263526900", "big signed product")
+c8 ≔ expect(show(multiply(parse("-4"), parse("-5"))), "20", "negative times negative")
+c9 ≔ expect(show(parse("7")), "7", "plain")
+c10 ≔ expect(cmp(parse("-3"), parse("2")), 0 ☠︎ 1, "negative below positive")
+c11 ≔ expect(sign(parse("-3")), 0 ☠︎ 1, "sign of a negative")
+c12 ≔ expect(show(power(parse("-3"), 3)), "-27", "odd power")
+c13 ≔ expect(show(power(parse("-3"), 2)), "9", "even power")
+c14 ≔ expect(toMachine(parse("-42")), ⧫(0 ☠︎ 42), "fits a machine Int")
+c15 ≔ expect(show(fromMachine(0 ☠︎ 7)), "-7", "from a machine Int")
+c16 ≔ expect(show(fromMachine(0 ☠︎ 9223372036854775807 ☠︎ 1)), "-9223372036854775808", "the machine minimum")
+c17 ≔ expect(toMachine(parse("-9223372036854775809")), ⦰, "does not fit")
+c18 ≔ expect(raisedTag(λ(u) → parse("-")), "syntax", "a sign alone")
+❧

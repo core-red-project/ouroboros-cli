@@ -1,0 +1,5 @@
+; Signed integers of any size, with truncating division.
+(div -100 7)
+(mod -100 7)
+(mul -123456789012345678901234567890 98765432109876543210)
+(pow -2 63)

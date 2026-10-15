@@ -1,0 +1,13 @@
+⟲support
+⟲json
+
+c1 ≔ expect(string("a"), "\"a\"", "plain")
+c2 ≔ expect(string("a\"b"), "\"a\\\"b\"", "quote")
+c3 ≔ expect(string("a\\b"), "\"a\\\\b\"", "backslash")
+c4 ≔ expect(string("a\nb\tc"), "\"a\\nb\\tc\"", "newline and tab")
+c5 ≔ expect(string("\u{1}"), "\"\\u0001\"", "control characters are escaped")
+c6 ≔ expect(string("é👍"), "\"é👍\"", "non-ASCII passes through")
+c7 ≔ expect(array(⁝("1", ⁝("2", ⊘))), "[1,2]", "array")
+c8 ≔ expect(array(⊘), "[]", "empty array")
+c9 ≔ expect(object(⁝(member("k", "1"), ⁝(member("s", string("x")), ⊘))), "{\"k\":1,\"s\":\"x\"}", "object")
+❧

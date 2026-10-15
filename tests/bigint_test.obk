@@ -1,0 +1,35 @@
+⟲support
+⟲bigint
+
+λfactorialOf(n: ⟁): List ▷ ⟁ → ⟡ (n ≡ 0) {
+  ◉ → fromInt(1) ⟢
+  ◎ → mulSmall(factorialOf(n ☠︎ 1), n)
+}
+
+c1 ≔ expect(toStr(fromInt(0)), "0", "zero prints as 0")
+c2 ≔ expect(toStr(fromInt(1000000000)), "1000000000", "a limb boundary keeps its inner zeros")
+c3 ≔ expect(toStr(fromStr("007")), "7", "leading zeros are dropped")
+c4 ≔ expect(toStr(fromStr("1000000000000000000000")), "1000000000000000000000", "round trip of a big literal")
+c5 ≔ expect(toStr(add(fromStr("999999999999999999"), fromInt(1))), "1000000000000000000", "carry across limbs")
+c6 ≔ expect(toStr(sub(fromStr("1000000000000000000000"), fromInt(1))), "999999999999999999999", "borrow across limbs")
+c7 ≔ expect(toStr(sub(fromInt(5), fromInt(5))), "0", "x - x is zero")
+c8 ≔ expect(raisedTag(λ(u) → sub(fromInt(1), fromInt(2))), "underflow", "naturals do not go below zero")
+c9 ≔ expect(toStr(mul(fromStr("123456789012345678901234567890"), fromStr("987654321098765432109876543210"))), "121932631137021795226185032733622923332237463801111263526900", "big product")
+c10 ≔ expect(toStr(mul(fromInt(0), fromStr("12345678901234567890"))), "0", "times zero")
+q1 ≔ expect(toStr(div(fromStr("1000000000000000000000000000000"), fromStr("333333333333"))), "3000000000003000000", "long division")
+q2 ≔ expect(toStr(mod(fromStr("1000000000000000000000000000000"), fromStr("333333333333"))), "1000000", "remainder")
+q3 ≔ expect(toStr(div(fromStr("5000000000000000000"), fromStr("5"))), "1000000000000000000", "single-limb divisor")
+q4 ≔ expect(toStr(div(fromInt(3), fromInt(7))), "0", "smaller dividend")
+q5 ≔ expect(toStr(mod(fromInt(3), fromInt(7))), "3", "smaller dividend keeps itself as remainder")
+q6 ≔ expect(raisedTag(λ(u) → div(fromInt(1), fromInt(0))), "DivisionByZero", "division by zero")
+q7 ≔ expect(raisedTag(λ(u) → fromStr("+5")), "syntax", "naturals take digits only")
+c11 ≔ expect(toStr(pow(fromInt(2), 100)), "1267650600228229401496703205376", "2^100")
+c12 ≔ expect(toStr(factorialOf(25)), "15511210043330985984000000", "25!")
+c13 ≔ expect(compare(fromStr("1000000000"), fromStr("999999999")), 1, "longer is larger")
+c14 ≔ expect(compare(fromStr("12"), fromStr("12")), 0, "equal")
+c15 ≔ expect(compare(fromStr("3000000001"), fromStr("3000000002")), 0 ☠︎ 1, "same length, last limb differs")
+c16 ≔ expect(toInt(fromStr("999999999999999999")), ⧫(999999999999999999), "fits an Int")
+c17 ≔ expect(toInt(fromStr("1000000000000000000")), ⦰, "does not fit an Int")
+c18 ≔ expect(raisedTag(λ(u) → fromStr("12x")), "syntax", "only digits")
+c19 ≔ expect(toStr(pow(fromInt(2), 200)), "1606938044258990275541962092341162602522202993782792835301376", "2^200 by karatsuba")
+❧

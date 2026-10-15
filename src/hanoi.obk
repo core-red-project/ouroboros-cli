@@ -1,0 +1,32 @@
+// ═══════════════════════════════════════════════════════════════
+// Towers of Hanoi: the plain recursion, and its move count 2^n − 1
+// as a natural number of any size.
+// ═══════════════════════════════════════════════════════════════
+
+⟲bigint
+
+// Prints every move of an n-disk tower, source → target.
+λmoves(n: ⟁, from: ⌘, to: ⌘, via: ⌘): ∅ →⟳ ⟡ (n ≡ 0) {
+  ◉ → ∅ ⟢
+  ◎ → (
+    first ≔ moves(n ☠︎ 1, from, via, to)
+    step ≔ ⌁↑("move disk " ✚ ⍕(n) ✚ " from " ✚ from ✚ " to " ✚ to)
+    moves(n ☠︎ 1, via, to, from)
+  )
+}
+
+// 2^n − 1 without enumerating: count(n) = 2·count(n−1) + 1.
+λcount(n: ⟁): List ▷ ⟁ →⟳ ⟡ (n ≡ 0) {
+  ◉ → ⊘ ⟢
+  ◎ → add(mulSmall(count(n ☠︎ 1), 2), fromInt(1))
+}
+
+Move ≔ { disk: ⟁ ⟢ from: ⌘ ⟢ to: ⌘ }
+
+// Every move of an n-disk tower in order, in front of `acc`:
+// n−1 disks aside, the largest across, n−1 disks back on top.
+λmoveList(n: ⟁, from: ⌘, to: ⌘, via: ⌘, acc: List ▷ Move): List ▷ Move →⟳ ⟡ (n ≡ 0) {
+  ◉ → acc ⟢
+  ◎ → moveList(n ☠︎ 1, from, via, to, ⁝(Move { disk: n ⟢ from: from ⟢ to: to }, moveList(n ☠︎ 1, via, to, from, acc)))
+}
+❧

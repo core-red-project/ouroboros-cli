@@ -1,0 +1,355 @@
+// ═══════════════════════════════════════════════════════════════
+// ouroboros — a recursive CLI written in Obfusku.
+// Entry point: dispatch, output modes and exit status. The command-line
+// contract itself (options, help, completions) is in `cli`.
+// ═══════════════════════════════════════════════════════════════
+
+⟲prelude
+⟲bigint
+⟲integer
+⟲sexpr
+⟲evaluator
+⟲hanoi
+⟲json
+⟲cli
+
+// Largest arguments accepted: beyond these a command takes minutes.
+λlimitFactorial(u: ∅): ⟁ → 5000
+λlimitFibonacci(u: ∅): ⟁ → 20000
+λlimitCount(u: ∅): ⟁ → 20000
+λlimitPrint(u: ∅): ⟁ → 20
+
+// ── output modes ──────────────────────────────────────────────
+
+// Data on standard output; nothing at all under --quiet.
+λemit(o: Options, text: ⌘): ∅ → ⟡ o.quiet {
+  ◉ → ∅ ⟢
+  ◎ → ⌁↑(text)
+}
+
+// Text without a trailing newline (for streamed JSON).
+λemitRaw(o: Options, text: ⌘): ∅ → ⟡ o.quiet {
+  ◉ → ∅ ⟢
+  ◎ → ⌁↑⎙(text)
+}
+
+// Diagnostics on standard error, only under --verbose.
+λexplain(o: Options, text: ⌘): ∅ → ⟡ o.verbose {
+  ◉ → ⌁↑⍉("verbose: " ✚ text) ⟢
+  ◎ → ∅
+}
+
+λprintLines(o: Options, lines: List ▷ ⌘): ∅ → ⟡ lines {
+  ⊘ → ∅ ⟢
+  ⁝(l, tl) → (
+    shown ≔ emit(o, l)
+    printLines(o, tl)
+  )
+}
+
+// ── arguments ─────────────────────────────────────────────────
+
+λparseCount(text: ⌘, what: ⌘, limit: ⟁): ⟁ → ⟡ ↦(text) {
+  ✓(v) → ⟡ (v < 0) {
+    ◉ → ☄ Usage(what ✚ " must not be negative, found " ✚ text) ⟢
+    ◎ → ⟡ (v > limit) {
+      ◉ → ☄ Usage(what ✚ " is limited to " ✚ ⍕(limit) ✚ ", found " ✚ text) ⟢
+      ◎ → v
+    }
+  } ⟢
+  ✗(m) → ☄ Usage(what ✚ " must be a whole number, found '" ✚ text ✚ "'")
+}
+
+λhasFlag(flag: ⌘, args: List ▷ ⌘): ○ → ⟡ args {
+  ⊘ → ◎ ⟢
+  ⁝(a, tl) → a ≡ flag ∨ hasFlag(flag, tl)
+}
+
+// An option the command does not know (a long flag, or a short one that
+// is not a negative number).
+λisOption(a: ⌘): ○ → ⟡ ⊢("--")(a) {
+  ◉ → ◉ ⟢
+  ◎ → ⊢("-")(a) ∧ ⍴(a) > 1 ∧ isNegativeNumber(a) ≡ ◎
+}
+
+λpositional(args: List ▷ ⌘): List ▷ ⌘ → ⟡ args {
+  ⊘ → ⊘ ⟢
+  ⁝(a, tl) → ⟡ isOption(a) {
+    ◉ → positional(tl) ⟢
+    ◎ → ⁝(a, positional(tl))
+  }
+}
+
+λrejectOptions(known: List ▷ ⌘, args: List ▷ ⌘): ∅ → ⟡ args {
+  ⊘ → ∅ ⟢
+  ⁝(a, tl) → ⟡ isOption(a) {
+    ◉ → ⟡ hasFlag(a, known) {
+      ◉ → rejectOptions(known, tl) ⟢
+      ◎ → ☄ Usage("unknown option " ✚ a)
+    } ⟢
+    ◎ → rejectOptions(known, tl)
+  }
+}
+
+λoneArgument(command: ⌘, args: List ▷ ⌘, what: ⌘): ⌘ → ⟡ positional(args) {
+  ⁝(a, ⊘) → a ⟢
+  ⊘ → ☄ Usage(command ✚ " needs " ✚ what) ⟢
+  _ → ☄ Usage(command ✚ " takes exactly one " ✚ what)
+}
+
+// ── commands ──────────────────────────────────────────────────
+
+λfactorialOf(n: ⟁): List ▷ ⟁ → ⟡ (n ≡ 0) {
+  ◉ → fromInt(1) ⟢
+  ◎ → mulSmall(factorialOf(n ☠︎ 1), n)
+}
+
+λfibLoop(n: ⟁, a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ → ⟡ (n ≡ 0) {
+  ◉ → a ⟢
+  ◎ → fibLoop(n ☠︎ 1, b, add(a, b))
+}
+
+// `{"command":…,"n":…,"value":"…"}` or the bare decimal text.
+λnumberResult(o: Options, command: ⌘, n: ⟁, key: ⌘, value: ⌘): ∅ → ⟡ o.json {
+  ◉ → emit(o, object(⁝(member("command", string(command)), ⁝(member("n", ⍕(n)), ⁝(member(key, string(value)), ⊘))))) ⟢
+  ◎ → emit(o, value)
+}
+
+λcmdFactorial(o: Options, args: List ▷ ⌘): ∅ → (
+  known ≔ rejectOptions(⊘, args)
+  n ≔ parseCount(oneArgument("factorial", args, "a number N"), "N", limitFactorial(∅))
+  value ≔ toStr(factorialOf(n))
+  noted ≔ explain(o, "factorial " ✚ ⍕(n) ✚ " has " ✚ ⍕(⍴(value)) ✚ " digits")
+  numberResult(o, "factorial", n, "value", value)
+)
+
+λcmdFibonacci(o: Options, args: List ▷ ⌘): ∅ → (
+  known ≔ rejectOptions(⊘, args)
+  n ≔ parseCount(oneArgument("fibonacci", args, "a number N"), "N", limitFibonacci(∅))
+  value ≔ toStr(fibLoop(n, ⊘, fromInt(1)))
+  noted ≔ explain(o, "fibonacci " ✚ ⍕(n) ✚ " has " ✚ ⍕(⍴(value)) ✚ " digits")
+  numberResult(o, "fibonacci", n, "value", value)
+)
+
+λmoveJson(m: Move): ⌘ → object(⁝(member("disk", ⍕(m.disk)), ⁝(member("from", string(m.from)), ⁝(member("to", string(m.to)), ⊘))))
+
+// Streams the moves as a JSON array: the list may hold a million items.
+λstreamMoves(o: Options, ms: List ▷ Move, first: ○): ∅ → ⟡ ms {
+  ⊘ → ∅ ⟢
+  ⁝(m, tl) → (
+    sep ≔ emitRaw(o, ⟡ first {
+      ◉ → "" ⟢
+      ◎ → ","
+    })
+    one ≔ emitRaw(o, moveJson(m))
+    streamMoves(o, tl, ◎)
+  )
+}
+
+λcmdHanoi(o: Options, args: List ▷ ⌘): ∅ → (
+  known ≔ rejectOptions(⁝("--count", ⊘), args)
+  counting ≔ hasFlag("--count", args)
+  text ≔ oneArgument("hanoi", args, "a number N")
+  ⟡ counting {
+    ◉ → (
+      n ≔ parseCount(text, "N", limitCount(∅))
+      numberResult(o, "hanoi", n, "moves", toStr(count(n)))
+    ) ⟢
+    ◎ → (
+      n ≔ parseCount(text, "N", limitPrint(∅))
+      ⟡ o.json {
+        ◉ → (
+          head ≔ emitRaw(o, "{\"command\":\"hanoi\",\"n\":" ✚ ⍕(n) ✚ ",\"moves\":[")
+          body ≔ streamMoves(o, moveList(n, "A", "C", "B", ⊘), ◉)
+          emit(o, "]}")
+        ) ⟢
+        ◎ → ⟡ o.quiet {
+          ◉ → ∅ ⟢
+          ◎ → moves(n, "A", "C", "B")
+        }
+      }
+    )
+  }
+)
+
+λreadSource(path: ⌘): ⌘ → ⟡ (path ≡ "-") {
+  ◉ → ⌁↓⎙(∅) ⟢
+  ◎ → ⌁↓⌬(path)
+}
+
+λcmdEval(o: Options, args: List ▷ ⌘): ∅ → (
+  known ≔ rejectOptions(⊘, args)
+  path ≔ oneArgument("eval", args, "a file (or - for standard input)")
+  results ≔ runProgram(readSource(path))
+  noted ≔ explain(o, "evaluated " ✚ path)
+  ⟡ o.json {
+    ◉ → emit(o, object(⁝(member("command", string("eval")), ⁝(member("results", array(quoteAll(results))), ⊘)))) ⟢
+    ◎ → printLines(o, results)
+  }
+)
+
+λquoteAll(xs: List ▷ ⌘): List ▷ ⌘ → ⟡ xs {
+  ⊘ → ⊘ ⟢
+  ⁝(h, tl) → ⁝(string(h), quoteAll(tl))
+}
+
+λoutlineForms(forms: List ▷ Sx): List ▷ ⌘ → ⟡ forms {
+  ⊘ → ⊘ ⟢
+  ⁝(f, tl) → append(outline(f, ""), outlineForms(tl))
+}
+
+λsumOver(forms: List ▷ Sx, f: Sx → ⟁): ⟁ → ⟡ forms {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → f(h) ✚ sumOver(tl, f)
+}
+
+λdeepest(forms: List ▷ Sx, best: ⟁): ⟁ → ⟡ forms {
+  ⊘ → best ⟢
+  ⁝(h, tl) → deepest(tl, max(best, depth(h)))
+}
+
+λlistLength(xs: List ▷ Sx): ⟁ → ⟡ xs {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → 1 ✚ listLength(tl)
+}
+
+λcmdTree(o: Options, args: List ▷ ⌘): ∅ → (
+  known ≔ rejectOptions(⊘, args)
+  path ≔ oneArgument("tree", args, "a file (or - for standard input)")
+  forms ≔ parseProgram(readSource(path))
+  noted ≔ explain(o, "parsed " ✚ ⍕(listLength(forms)) ✚ " forms from " ✚ path)
+  nodes ≔ sumOver(forms, nodeCount)
+  leaves ≔ sumOver(forms, leafCount)
+  levels ≔ deepest(forms, 0)
+  summary ≔ "forms: " ✚ ⍕(listLength(forms)) ✚ "  nodes: " ✚ ⍕(nodes) ✚ "  leaves: " ✚ ⍕(leaves) ✚ "  depth: " ✚ ⍕(levels)
+  ⟡ o.json {
+    ◉ → emit(o, object(⁝(member("command", string("tree")), ⁝(member("forms", ⍕(listLength(forms))), ⁝(member("nodes", ⍕(nodes)), ⁝(member("leaves", ⍕(leaves)), ⁝(member("depth", ⍕(levels)), ⁝(member("outline", array(quoteAll(outlineForms(forms)))), ⊘)))))))) ⟢
+    ◎ → (
+      shown ≔ printLines(o, outlineForms(forms))
+      emit(o, summary)
+    )
+  }
+)
+
+λcmdCompletions(o: Options, args: List ▷ ⌘): ∅ → (
+  known ≔ rejectOptions(⊘, args)
+  shell ≔ oneArgument("completions", args, "a shell (bash, zsh, fish or powershell)")
+  ⌁↑⎙(completionScript(shell))
+)
+
+// ── dispatch ──────────────────────────────────────────────────
+
+λcolored(o: Options): ○ → colorEnabled(o)
+
+λdispatch(o: Options, command: ⌘, rest: List ▷ ⌘): ∅ → ⟡ (command ≡ "help") {
+  ◉ → ⌁↑⎙(helpText(colored(o))) ⟢
+  ◎ → ⟡ (command ≡ "version") {
+    ◉ → ⌁↑(versionText(∅)) ⟢
+    ◎ → ⟡ (command ≡ "factorial") {
+      ◉ → cmdFactorial(o, rest) ⟢
+      ◎ → ⟡ (command ≡ "fibonacci") {
+        ◉ → cmdFibonacci(o, rest) ⟢
+        ◎ → ⟡ (command ≡ "hanoi") {
+          ◉ → cmdHanoi(o, rest) ⟢
+          ◎ → ⟡ (command ≡ "eval") {
+            ◉ → cmdEval(o, rest) ⟢
+            ◎ → ⟡ (command ≡ "tree") {
+              ◉ → cmdTree(o, rest) ⟢
+              ◎ → ⟡ (command ≡ "completions") {
+                ◉ → cmdCompletions(o, rest) ⟢
+                ◎ → ⟡ (command ≡ "man") {
+                  ◉ → ⌁↑⎙(manPage(∅)) ⟢
+                  ◎ → ☄ Usage("unknown command '" ✚ command ✚ "'" ✚ suggestion(command))
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Help and version are answered wherever they appear, and even under
+// --quiet: they were asked for.
+λrun(o: Options): ∅ → ⟡ o.help {
+  ◉ → ⌁↑⎙(helpText(colored(o))) ⟢
+  ◎ → ⟡ o.version {
+    ◉ → ⌁↑(versionText(∅)) ⟢
+    ◎ → ⟡ positionalCommand(o.rest) {
+      ⧫(command) → dispatch(o, command, withoutFirst(o.rest, command)) ⟢
+      ⦰ → ☄ Usage("missing command")
+    }
+  }
+}
+
+// The first argument that is not an option.
+λpositionalCommand(args: List ▷ ⌘): Optional ▷ ⌘ → ⟡ args {
+  ⊘ → ⦰ ⟢
+  ⁝(a, tl) → ⟡ isOption(a) {
+    ◉ → ☄ Usage("unknown option " ✚ a) ⟢
+    ◎ → ⧫(a)
+  }
+}
+
+// `args` without its first occurrence of `word`.
+λwithoutFirst(args: List ▷ ⌘, word: ⌘): List ▷ ⌘ → ⟡ args {
+  ⊘ → ⊘ ⟢
+  ⁝(a, tl) → ⟡ (a ≡ word) {
+    ◉ → tl ⟢
+    ◎ → ⁝(a, withoutFirst(tl, word))
+  }
+}
+
+// ── errors → exit status ──────────────────────────────────────
+
+λfail(code: ⟁, message: ⌘, hint: ⌘): ⟁ → (
+  shown ≔ ⌁↑⍉("error: " ✚ message ✚ "\n       " ✚ hint)
+  code
+)
+
+λusageHint(u: ∅): ⌘ → "run 'ouroboros --help' for usage"
+
+// What to do about a failure, from its tag and message.
+λfailureHint(tag: ⌘, message: ⌘): ⌘ → ⟡ (tag ≡ "syntax") {
+  ◉ → "check the parentheses and the names in the tree" ⟢
+  ◎ → ⟡ ∋("unbound name")(message) {
+    ◉ → "bind it with (let name value body) or as a (def …) parameter" ⟢
+    ◎ → ⟡ ∋("unknown function")(message) {
+      ◉ → "define it with (def name (params) body)" ⟢
+      ◎ → ⟡ ∋("recursion deeper")(message) {
+        ◉ → "make the recursion reach its base case within 10000 nested calls" ⟢
+        ◎ → ⟡ (tag ≡ "IOError" ∨ tag ≡ "PermissionDenied") {
+          ◉ → "check the path: it is relative to the working directory and must stay inside it" ⟢
+          ◎ → usageHint(∅)
+        }
+      }
+    }
+  }
+}
+
+λdescribe(e: Exception): ⟁ → ⟡ e {
+  Usage(m) → fail(2, m, usageHint(∅)) ⟢
+  Failure(t, m) → fail(1, ⟡ (t ≡ "syntax") {
+    ◉ → "syntax: " ✚ m ⟢
+    ◎ → m
+  }, failureHint(t, m)) ⟢
+  DivisionByZero → fail(1, "division by zero", "the divisor of (div …) and (mod …) must not be zero") ⟢
+  IntegerOverflow → fail(1, "internal integer overflow", "this is a bug in ouroboros; please report it") ⟢
+  InvalidOperation(m) → fail(1, m, "the input is too deeply nested for this command") ⟢
+  _ → fail(1, "unexpected failure", usageHint(∅))
+}
+
+// The whole catch is parenthesized: a bare handler body would keep reading
+// the declarations that follow it as its own local functions.
+λexecute(args: List ▷ ⌘): ⟁ → ☊ (
+  done ≔ run(parseOptions(args))
+  0
+) λ(e) → describe(e)
+
+// `⌁↯` never returns; its type is pinned to ∅ here.
+λexitWith(code: ⟁): ∅ → ⌁↯(code)
+
+status ≔ execute(⌁↓⌥(∅))
+result ≔ exitWith(status)
+❧

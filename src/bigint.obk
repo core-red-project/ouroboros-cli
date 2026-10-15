@@ -1,0 +1,331 @@
+// ═══════════════════════════════════════════════════════════════
+// Natural numbers of any size.
+// A number is a list of limbs in base 10^9, least significant first,
+// with no trailing zero limb; zero is the empty list.
+// ═══════════════════════════════════════════════════════════════
+
+⟲prelude
+
+// ── construction ──────────────────────────────────────────────
+
+λfromInt(n: ⟁): List ▷ ⟁ →⟳ ⟡ (n ≡ 0) {
+  ◉ → ⊘ ⟢
+  ◎ → ⁝(n ⌗ 1000000000, fromInt(n ÷ 1000000000))
+}
+
+// ── comparison ────────────────────────────────────────────────
+
+λlimbCount(a: List ▷ ⟁): ⟁ → ⟡ a {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → 1 ✚ limbCount(tl)
+}
+
+// Same length: the most significant differing limb decides; limbs are
+// compared from the least significant, the last difference wins.
+λcmpSameLength(a: List ▷ ⟁, b: List ▷ ⟁, seen: ⟁): ⟁ → ⟡ a {
+  ⊘ → seen ⟢
+  ⁝(x, xt) → ⟡ b {
+    ⊘ → seen ⟢
+    ⁝(y, yt) → ⟡ (x ≡ y) {
+      ◉ → cmpSameLength(xt, yt, seen) ⟢
+      ◎ → ⟡ (x < y) {
+        ◉ → cmpSameLength(xt, yt, 0 ☠︎ 1) ⟢
+        ◎ → cmpSameLength(xt, yt, 1)
+      }
+    }
+  }
+}
+
+// −1, 0 or 1.
+λcompare(a: List ▷ ⟁, b: List ▷ ⟁): ⟁ →⟳ (
+  la ≔ limbCount(a)
+  lb ≔ limbCount(b)
+  ⟡ (la < lb) {
+    ◉ → 0 ☠︎ 1 ⟢
+    ◎ → ⟡ (la > lb) {
+      ◉ → 1 ⟢
+      ◎ → cmpSameLength(a, b, 0)
+    }
+  }
+)
+
+λisZero(a: List ▷ ⟁): ○ →⟳ ⟡ a {
+  ⊘ → ◉ ⟢
+  ⁝(h, tl) → ◎
+}
+
+// ── addition ──────────────────────────────────────────────────
+
+λcarryOnly(c: ⟁): List ▷ ⟁ → ⟡ (c ≡ 0) {
+  ◉ → ⊘ ⟢
+  ◎ → ⁝(c, ⊘)
+}
+
+λaddStep(x: ⟁, y: ⟁, c: ⟁, xt: List ▷ ⟁, yt: List ▷ ⟁): List ▷ ⟁ → (
+  s ≔ x ✚ y ✚ c
+  ⁝(s ⌗ 1000000000, addCarry(xt, yt, s ÷ 1000000000))
+)
+
+λaddCarry(a: List ▷ ⟁, b: List ▷ ⟁, c: ⟁): List ▷ ⟁ → ⟡ a {
+  ⊘ → ⟡ b {
+    ⊘ → carryOnly(c) ⟢
+    ⁝(y, yt) → addStep(0, y, c, ⊘, yt)
+  } ⟢
+  ⁝(x, xt) → ⟡ b {
+    ⊘ → addStep(x, 0, c, xt, ⊘) ⟢
+    ⁝(y, yt) → addStep(x, y, c, xt, yt)
+  }
+}
+
+λadd(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ →⟳ addCarry(a, b, 0)
+
+// ── subtraction (naturals: a ≥ b) ─────────────────────────────
+
+// Strip high zero limbs left by a borrow chain.
+λtrim(a: List ▷ ⟁): List ▷ ⟁ → (
+  r ≔ trimRev(reverse(a))
+  reverse(r)
+)
+
+λtrimRev(a: List ▷ ⟁): List ▷ ⟁ → ⟡ a {
+  ⊘ → ⊘ ⟢
+  ⁝(h, tl) → ⟡ (h ≡ 0) {
+    ◉ → trimRev(tl) ⟢
+    ◎ → a
+  }
+}
+
+λsubStep(x: ⟁, y: ⟁, borrow: ⟁, xt: List ▷ ⟁, yt: List ▷ ⟁): List ▷ ⟁ → (
+  d ≔ x ☠︎ y ☠︎ borrow
+  ⟡ (d < 0) {
+    ◉ → ⁝(d ✚ 1000000000, subBorrow(xt, yt, 1)) ⟢
+    ◎ → ⁝(d, subBorrow(xt, yt, 0))
+  }
+)
+
+λsubBorrow(a: List ▷ ⟁, b: List ▷ ⟁, borrow: ⟁): List ▷ ⟁ → ⟡ a {
+  ⊘ → ⊘ ⟢
+  ⁝(x, xt) → ⟡ b {
+    ⊘ → subStep(x, 0, borrow, xt, ⊘) ⟢
+    ⁝(y, yt) → subStep(x, y, borrow, xt, yt)
+  }
+}
+
+// `a − b`; raises `Failure("underflow", …)` when `b > a`.
+λsub(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ →⟳ ⟡ (compare(a, b) < 0) {
+  ◉ → ☄ Failure("underflow", "natural subtraction below zero") ⟢
+  ◎ → trim(subBorrow(a, b, 0))
+}
+
+// ── multiplication ────────────────────────────────────────────
+
+// By a limb 0 ≤ m < 10^9: limb·m + carry < 10^18 + 10^9 fits an Int.
+λmulSmallCarry(a: List ▷ ⟁, m: ⟁, carry: ⟁): List ▷ ⟁ → ⟡ a {
+  ⊘ → fromInt(carry) ⟢
+  ⁝(x, xt) → (
+    p ≔ x ✱ m ✚ carry
+    ⁝(p ⌗ 1000000000, mulSmallCarry(xt, m, p ÷ 1000000000))
+  )
+}
+
+λmulSmall(a: List ▷ ⟁, m: ⟁): List ▷ ⟁ →⟳ ⟡ (m ≡ 0) {
+  ◉ → ⊘ ⟢
+  ◎ → mulSmallCarry(a, m, 0)
+}
+
+λshift(a: List ▷ ⟁): List ▷ ⟁ → ⟡ a {
+  ⊘ → ⊘ ⟢
+  ⁝(h, tl) → ⁝(0, a)
+}
+
+λmaxInt(a: ⟁, b: ⟁): ⟁ → ⟡ (a > b) {
+  ◉ → a ⟢
+  ◎ → b
+}
+
+λtakeLimbs(xs: List ▷ ⟁, n: ⟁): List ▷ ⟁ → ⟡ (n ≤ 0) {
+  ◉ → ⊘ ⟢
+  ◎ → ⟡ xs {
+    ⊘ → ⊘ ⟢
+    ⁝(h, tl) → ⁝(h, takeLimbs(tl, n ☠︎ 1))
+  }
+}
+
+λdropLimbs(xs: List ▷ ⟁, n: ⟁): List ▷ ⟁ → ⟡ (n ≤ 0) {
+  ◉ → xs ⟢
+  ◎ → ⟡ xs {
+    ⊘ → ⊘ ⟢
+    ⁝(h, tl) → dropLimbs(tl, n ☠︎ 1)
+  }
+}
+
+λshiftN(a: List ▷ ⟁, n: ⟁): List ▷ ⟁ → ⟡ (n ≤ 0 ∨ isZero(a)) {
+  ◉ → a ⟢
+  ◎ → ⁝(0, shiftN(a, n ☠︎ 1))
+}
+
+// Schoolbook fallback for small limb counts: a·(y + 10^9·rest) = a·y + 10^9·(a·rest).
+λmulSchool(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ →⟳ ⟡ b {
+  ⊘ → ⊘ ⟢
+  ⁝(y, yt) → add(mulSmall(a, y), shift(mulSchool(a, yt)))
+}
+
+// Karatsuba multiplication: splits inputs into halves and reduces 4 multiplies to 3.
+λmulKaratsuba(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ → (
+  la ≔ limbCount(a)
+  lb ≔ limbCount(b)
+  ⟡ (la < 4 ∨ lb < 4) {
+    ◉ → mulSchool(a, b) ⟢
+    ◎ → (
+      m ≔ maxInt(la, lb) ÷ 2
+      a0 ≔ trim(takeLimbs(a, m))
+      a1 ≔ dropLimbs(a, m)
+      b0 ≔ trim(takeLimbs(b, m))
+      b1 ≔ dropLimbs(b, m)
+      z0 ≔ mul(a0, b0)
+      z2 ≔ mul(a1, b1)
+      sumA ≔ add(a0, a1)
+      sumB ≔ add(b0, b1)
+      z1Mid ≔ mul(sumA, sumB)
+      z1 ≔ sub(sub(z1Mid, z0), z2)
+      add(add(z0, shiftN(z1, m)), shiftN(z2, m ✚ m))
+    )
+  }
+)
+
+λmul(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ →⟳ ⟡ (isZero(a) ∨ isZero(b)) {
+  ◉ → ⊘ ⟢
+  ◎ → mulKaratsuba(a, b)
+}
+
+// a^n by repeated squaring.
+λpow(a: List ▷ ⟁, n: ⟁): List ▷ ⟁ →⟳ ⟡ (n ≡ 0) {
+  ◉ → fromInt(1) ⟢
+  ◎ → (
+    half ≔ pow(a, n ÷ 2)
+    sq ≔ mul(half, half)
+    ⟡ (n ⌗ 2 ≡ 0) {
+      ◉ → sq ⟢
+      ◎ → mul(sq, a)
+    }
+  )
+}
+
+// ── text ──────────────────────────────────────────────────────
+
+λpadLimb(s: ⌘): ⌘ → ⟡ (⍴(s) < 9) {
+  ◉ → padLimb("0" ✚ s) ⟢
+  ◎ → s
+}
+
+// Limbs from most significant: the first unpadded, the rest nine digits.
+λjoinLimbs(a: List ▷ ⟁): ⌘ → ⟡ a {
+  ⊘ → "" ⟢
+  ⁝(h, tl) → padLimb(⍕(h)) ✚ joinLimbs(tl)
+}
+
+λtoStr(a: List ▷ ⟁): ⌘ →⟳ ⟡ a {
+  ⊘ → "0" ⟢
+  ⁝(top, rest) → (
+    r ≔ reverse(a)
+    ⟡ r {
+      ⊘ → "0" ⟢
+      ⁝(h, tl) → ⍕(h) ✚ joinLimbs(tl)
+    }
+  )
+}
+
+// Digits only, no sign; `Failure("syntax", …)` otherwise.
+λfromStr(s: ⌘): List ▷ ⟁ →⟳ ⟡ (⍴(s) ≡ 0) {
+  ◉ → ☄ Failure("syntax", "empty number") ⟢
+  ◎ → ⟡ onlyDigits(⍂(s)) {
+    ◉ → trim(limbsFromEnd(s, ⍴(s))) ⟢
+    ◎ → ☄ Failure("syntax", "not a natural number: " ✚ s)
+  }
+}
+
+λonlyDigits(cs: List ▷ ⌘): ○ → ⟡ cs {
+  ⊘ → ◉ ⟢
+  ⁝(c, tl) → c ≥ "0" ∧ c ≤ "9" ∧ onlyDigits(tl)
+}
+
+// Nine digits at a time from the right.
+λlimbsFromEnd(s: ⌘, end: ⟁): List ▷ ⟁ → ⟡ (end ≤ 0) {
+  ◉ → ⊘ ⟢
+  ◎ → (
+    start ≔ ⟡ (end > 9) {
+      ◉ → end ☠︎ 9 ⟢
+      ◎ → 0
+    }
+    chunk ≔ ⊏(start)(end ☠︎ start)(s)
+    ⟡ ↦(chunk) {
+      ✓(v) → ⟡ (v < 0) {
+        ◉ → ☄ Failure("syntax", "not a natural number: " ✚ s) ⟢
+        ◎ → ⁝(v, limbsFromEnd(s, start))
+      } ⟢
+      ✗(m) → ☄ Failure("syntax", "not a natural number: " ✚ s)
+    }
+  )
+}
+
+// Fits a machine Int?  (at most two limbs: < 10^18)
+λtoInt(a: List ▷ ⟁): Optional ▷ ⟁ →⟳ ⟡ a {
+  ⊘ → ⧫(0) ⟢
+  ⁝(x, xt) → ⟡ xt {
+    ⊘ → ⧫(x) ⟢
+    ⁝(y, yt) → ⟡ yt {
+      ⊘ → ⧫(x ✚ y ✱ 1000000000) ⟢
+      ⁝(z, zt) → ⦰
+    }
+  }
+}
+
+// ── division ──────────────────────────────────────────────────
+
+// The largest q in [0, 10^9) with `d·q ≤ r`, by bisection.
+λquotientLimb(d: List ▷ ⟁, r: List ▷ ⟁, lo: ⟁, hi: ⟁): ⟁ → ⟡ (lo ≥ hi) {
+  ◉ → lo ⟢
+  ◎ → (
+    mid ≔ (lo ✚ hi ✚ 1) ÷ 2
+    ⟡ (compare(mulSmall(d, mid), r) ≤ 0) {
+      ◉ → quotientLimb(d, r, mid, hi) ⟢
+      ◎ → quotientLimb(d, r, lo, mid ☠︎ 1)
+    }
+  )
+}
+
+// Long division, most significant limb first. `rest` are the dividend
+// limbs still to bring down, `r` the running remainder, `acc` the quotient
+// limbs produced so far (most significant first).
+λdivLoop(d: List ▷ ⟁, rest: List ▷ ⟁, r: List ▷ ⟁, acc: List ▷ ⟁): List ▷ (List ▷ ⟁) → ⟡ rest {
+  ⊘ → ⁝(trim(acc), ⁝(r, ⊘)) ⟢
+  ⁝(limb, tl) → (
+    next ≔ ⟡ (isZero(r) ∧ limb ≡ 0) {
+      ◉ → ⊘ ⟢
+      ◎ → ⁝(limb, r)
+    }
+    q ≔ quotientLimb(d, next, 0, 999999999)
+    divLoop(d, tl, sub(next, mulSmall(d, q)), ⁝(q, acc))
+  )
+}
+
+// `⁝(quotient, ⁝(remainder, ⊘))` with a = q·b + r and 0 ≤ r < b.
+// Raises DivisionByZero when b is zero.
+λdivmod(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ (List ▷ ⟁) →⟳ ⟡ isZero(b) {
+  ◉ → ☄ DivisionByZero ⟢
+  ◎ → ⟡ (compare(a, b) < 0) {
+    ◉ → ⁝(⊘, ⁝(a, ⊘)) ⟢
+    ◎ → divLoop(b, reverse(a), ⊘, ⊘)
+  }
+}
+
+λdiv(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ →⟳ ⟡ divmod(a, b) {
+  ⁝(q, rest) → q ⟢
+  ⊘ → ⊘
+}
+
+λmod(a: List ▷ ⟁, b: List ▷ ⟁): List ▷ ⟁ →⟳ ⟡ divmod(a, b) {
+  ⁝(q, ⁝(r, rest)) → r ⟢
+  _ → ⊘
+}
+❧

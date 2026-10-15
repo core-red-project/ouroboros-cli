@@ -1,0 +1,150 @@
+// ═══════════════════════════════════════════════════════════════
+// The tree format: s-expressions.
+//
+//   (add 1 (mul 2 3))        a form: a list of atoms and forms
+//   ; comment to end of line
+//
+// Every program, data file and expression of Ouroboros is such a tree.
+// ═══════════════════════════════════════════════════════════════
+
+⟲prelude
+
+Sx ≔ { Atom(⌘) ⟢ Node(List ▷ Sx) }
+
+Parsed ≔ { value: Sx ⟢ rest: List ▷ ⌘ }
+
+// ── tokens ────────────────────────────────────────────────────
+
+λisSpace(c: ⌘): ○ → c ≡ " " ∨ c ≡ "\n" ∨ c ≡ "\t" ∨ c ≡ "\r"
+
+λflush(cur: ⌘, rest: List ▷ ⌘): List ▷ ⌘ → ⟡ (⍴(cur) ≡ 0) {
+  ◉ → rest ⟢
+  ◎ → ⁝(cur, rest)
+}
+
+// Drops characters up to and including the next newline.
+λskipLine(cs: List ▷ ⌘): List ▷ ⌘ → ⟡ cs {
+  ⊘ → ⊘ ⟢
+  ⁝(c, tl) → ⟡ (c ≡ "\n") {
+    ◉ → tl ⟢
+    ◎ → skipLine(tl)
+  }
+}
+
+λtokenize(cs: List ▷ ⌘, cur: ⌘): List ▷ ⌘ → ⟡ cs {
+  ⊘ → flush(cur, ⊘) ⟢
+  ⁝(c, tl) → ⟡ isSpace(c) {
+    ◉ → flush(cur, tokenize(tl, "")) ⟢
+    ◎ → ⟡ (c ≡ ";") {
+      ◉ → flush(cur, tokenize(skipLine(tl), "")) ⟢
+      ◎ → ⟡ (c ≡ "(" ∨ c ≡ ")") {
+        ◉ → flush(cur, ⁝(c, tokenize(tl, ""))) ⟢
+        ◎ → tokenize(tl, cur ✚ c)
+      }
+    }
+  }
+}
+
+// ── parsing ───────────────────────────────────────────────────
+
+λparseExpr(ts: List ▷ ⌘): Parsed → ⟡ ts {
+  ⊘ → ☄ Failure("syntax", "unexpected end of input") ⟢
+  ⁝(t, tl) → ⟡ (t ≡ "(") {
+    ◉ → parseForm(tl, ⊘) ⟢
+    ◎ → ⟡ (t ≡ ")") {
+      ◉ → ☄ Failure("syntax", "unexpected ')'") ⟢
+      ◎ → Parsed { value: Atom(t) ⟢ rest: tl }
+    }
+  }
+}
+
+// `acc` holds the elements read so far, most recent first.
+λparseForm(ts: List ▷ ⌘, acc: List ▷ Sx): Parsed → ⟡ ts {
+  ⊘ → ☄ Failure("syntax", "missing ')'") ⟢
+  ⁝(t, tl) → ⟡ (t ≡ ")") {
+    ◉ → Parsed { value: Node(reverse(acc)) ⟢ rest: tl } ⟢
+    ◎ → (
+      p ≔ parseExpr(ts)
+      parseForm(p.rest, ⁝(p.value, acc))
+    )
+  }
+}
+
+λparseAll(ts: List ▷ ⌘, acc: List ▷ Sx): List ▷ Sx → ⟡ ts {
+  ⊘ → reverse(acc) ⟢
+  ⁝(t, tl) → (
+    p ≔ parseExpr(ts)
+    parseAll(p.rest, ⁝(p.value, acc))
+  )
+}
+
+// Every top-level tree of `text`, in order.
+λparseProgram(text: ⌘): List ▷ Sx →⟳ parseAll(tokenize(⍂(text), ""), ⊘)
+
+// ── shape ─────────────────────────────────────────────────────
+
+λrender(x: Sx): ⌘ →⟳ ⟡ x {
+  Atom(a) → a ⟢
+  Node(items) → "(" ✚ renderItems(items) ✚ ")"
+}
+
+λrenderItems(items: List ▷ Sx): ⌘ → ⟡ items {
+  ⊘ → "" ⟢
+  ⁝(h, tl) → ⟡ tl {
+    ⊘ → render(h) ⟢
+    ⁝(n, nt) → render(h) ✚ " " ✚ renderItems(tl)
+  }
+}
+
+λmax(a: ⟁, b: ⟁): ⟁ →⟳ ⟡ (a > b) {
+  ◉ → a ⟢
+  ◎ → b
+}
+
+λdepth(x: Sx): ⟁ →⟳ ⟡ x {
+  Atom(a) → 0 ⟢
+  Node(items) → 1 ✚ maxDepth(items, 0)
+}
+
+λmaxDepth(items: List ▷ Sx, best: ⟁): ⟁ → ⟡ items {
+  ⊘ → best ⟢
+  ⁝(h, tl) → maxDepth(tl, max(best, depth(h)))
+}
+
+λnodeCount(x: Sx): ⟁ →⟳ ⟡ x {
+  Atom(a) → 0 ⟢
+  Node(items) → 1 ✚ sumNodes(items)
+}
+
+λsumNodes(items: List ▷ Sx): ⟁ → ⟡ items {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → nodeCount(h) ✚ sumNodes(tl)
+}
+
+λleafCount(x: Sx): ⟁ →⟳ ⟡ x {
+  Atom(a) → 1 ⟢
+  Node(items) → sumLeaves(items)
+}
+
+λsumLeaves(items: List ▷ Sx): ⟁ → ⟡ items {
+  ⊘ → 0 ⟢
+  ⁝(h, tl) → leafCount(h) ✚ sumLeaves(tl)
+}
+
+// Outline: one atom or form head per line, children indented.
+λoutline(x: Sx, indent: ⌘): List ▷ ⌘ →⟳ ⟡ x {
+  Atom(a) → ⁝(indent ✚ a, ⊘) ⟢
+  Node(items) → ⟡ items {
+    ⊘ → ⁝(indent ✚ "()", ⊘) ⟢
+    ⁝(head, children) → ⟡ head {
+      Atom(name) → ⁝(indent ✚ name ✚ "  [" ✚ ⍕(1 ✚ sumNodes(children)) ✚ " nodes]", outlineAll(children, indent ✚ "  ")) ⟢
+      Node(more) → ⁝(indent ✚ "(", outlineAll(items, indent ✚ "  "))
+    }
+  }
+}
+
+λoutlineAll(items: List ▷ Sx, indent: ⌘): List ▷ ⌘ → ⟡ items {
+  ⊘ → ⊘ ⟢
+  ⁝(h, tl) → append(outline(h, indent), outlineAll(tl, indent))
+}
+❧

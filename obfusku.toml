@@ -1,0 +1,24 @@
+format = 2
+
+[project]
+name = "ouroboros"
+version = "0.1.0"
+description = "A recursive CLI written in Obfusku."
+license = "MIT"
+authors = ["Core Red Project"]
+
+[entry]
+path = "src/main.obk"
+
+[bundle]
+output = "ouroboros"
+
+[test]
+include = ["tests/**/*_test.obk"]
+
+[capabilities]
+console = true
+args = true
+env = true
+exit = true
+fs = "cwd"

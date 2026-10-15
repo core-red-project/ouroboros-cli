@@ -1,0 +1,48 @@
+⟲support
+⟲prelude
+⟲evaluator
+
+λfirst(lines: List ▷ ⌘): ⌘ → ⟡ lines {
+  ⊘ → "<none>" ⟢
+  ⁝(h, tl) → h
+}
+
+λlast(lines: List ▷ ⌘): ⌘ → ⟡ lines {
+  ⊘ → "<none>" ⟢
+  ⁝(h, tl) → ⟡ tl {
+    ⊘ → h ⟢
+    _ → last(tl)
+  }
+}
+
+λvalue(program: ⌘): ⌘ → last(runProgram(program))
+
+fact ≔ "(def fact (n) (if (eq n 0) 1 (mul n (fact (sub n 1))))) "
+
+c1 ≔ expect(value("(add 2 3)"), "5", "addition")
+c2 ≔ expect(value("(mul (add 1 2) (sub 10 4))"), "18", "nesting")
+c3 ≔ expect(value("(let x 6 (mul x x))"), "36", "let")
+c4 ≔ expect(value("(if 0 1 2)"), "2", "zero is false")
+c5 ≔ expect(value("(if (lt 1 2) 10 20)"), "10", "lt")
+c6 ≔ expect(value("(pow 2 64)"), "18446744073709551616", "pow beyond a machine Int")
+c7 ≔ expect(value(fact ✚ "(fact 25)"), "15511210043330985984000000", "recursive def over big numbers")
+c8 ≔ expect(value("(def fib (n) (if (lt n 2) n (add (fib (sub n 1)) (fib (sub n 2))))) (fib 12)"), "144", "double recursion")
+c9 ≔ expect(first(runProgram("1 2 3")), "1", "every expression is evaluated")
+c10 ≔ expect(value("(sub 1 2)"), "-1", "integers go below zero")
+d1 ≔ expect(value("(mul -3 4)"), "-12", "negative literal")
+d2 ≔ expect(value("(div -100 7)"), "-14", "division truncates toward zero")
+d3 ≔ expect(value("(mod -100 7)"), "-2", "the remainder takes the dividend's sign")
+d4 ≔ expect(value("(div 100000000000000000000000000000 3)"), "33333333333333333333333333333", "big quotient")
+d5 ≔ expect(value("(pow -2 63)"), "-9223372036854775808", "odd power of a negative")
+d6 ≔ expect(value("(neg (sub 3 10))"), "7", "neg")
+d7 ≔ expect(value("(abs -9)"), "9", "abs")
+d8 ≔ expect(raisedTag(λ(u) → value("(div 1 0)")), "DivisionByZero", "division by zero is the host exception")
+d9 ≔ expect(value("(lt -5 -2)"), "1", "ordering across signs")
+c11 ≔ expect(raisedTag(λ(u) → value("(nope 1 2)")), "eval", "unknown function")
+c12 ≔ expect(raisedTag(λ(u) → value("x")), "eval", "unbound name")
+c13 ≔ expect(raisedTag(λ(u) → value("(def f (n) (f n)) (f 1)")), "eval", "unbounded recursion is cut off")
+c14 ≔ expect(raisedTag(λ(u) → value("(def f (a b) a) (f 1)")), "eval", "too few arguments")
+c15 ≔ expect(raisedTag(λ(u) → value("(def f (a) a)")), "eval", "no expression to evaluate")
+c16 ≔ expect(value("(let a 1 (let b 2 (let c 3 (let d 4 (let e 5 (let f 6 (add (add (add a b) (add c d)) (add e f))))))))"), "21", "many let bindings in avl tree")
+c17 ≔ expect(value("(def f1 (x) (add x 1)) (def f2 (x) (mul (f1 x) 2)) (def f3 (x) (sub (f2 x) 3)) (def f4 (x) (add (f3 x) 4)) (f4 10)"), "23", "multiple functions in avl tree")
+❧

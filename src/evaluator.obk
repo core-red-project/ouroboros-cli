@@ -1,0 +1,371 @@
+// ═══════════════════════════════════════════════════════════════
+// A recursive evaluator over trees (integers of any size).
+//
+//   (def fact (n) (if (eq n 0) 1 (mul n (fact (sub n 1)))))
+//   (fact 30)
+//
+// Forms:  (def name (params…) body) · (let name value body)
+//         (if cond then else) — 0 is false, anything else true
+//         (add a b) (sub a b) (mul a b) (div a b) (mod a b) (pow a n)
+//         (neg a) (abs a) (eq a b) (lt a b)
+//         (name args…) — a call of a defined function
+// ═══════════════════════════════════════════════════════════════
+
+⟲prelude
+⟲bigint
+⟲integer
+⟲sexpr
+
+Func ≔ { fname: ⌘ ⟢ params: List ▷ ⌘ ⟢ body: Sx }
+
+// ── balanced environments (persistent AVL trees) ─────────────
+
+VarTree ≔ {
+  VarLeaf ⟢
+  VarNode(⌘, Z, VarTree, VarTree, ⟁)
+}
+
+FuncTree ≔ {
+  FuncLeaf ⟢
+  FuncNode(⌘, Func, FuncTree, FuncTree, ⟁)
+}
+
+λmaxH(a: ⟁, b: ⟁): ⟁ → ⟡ (a > b) {
+  ◉ → a ⟢
+  ◎ → b
+}
+
+λvarHeight(t: VarTree): ⟁ → ⟡ t {
+  VarLeaf → 0 ⟢
+  VarNode(k, v, l, r, h) → h
+}
+
+λmakeVarNode(k: ⌘, v: Z, l: VarTree, r: VarTree): VarTree →
+  VarNode(k, v, l, r, 1 ✚ maxH(varHeight(l), varHeight(r)))
+
+λvarBalance(t: VarTree): ⟁ → ⟡ t {
+  VarLeaf → 0 ⟢
+  VarNode(k, v, l, r, h) → varHeight(l) ☠︎ varHeight(r)
+}
+
+λrotateVarRight(t: VarTree): VarTree → ⟡ t {
+  VarNode(k, v, VarNode(lk, lv, ll, lr, lh), r, h) →
+    makeVarNode(lk, lv, ll, makeVarNode(k, v, lr, r)) ⟢
+  _ → t
+}
+
+λrotateVarLeft(t: VarTree): VarTree → ⟡ t {
+  VarNode(k, v, l, VarNode(rk, rv, rl, rr, rh), h) →
+    makeVarNode(rk, rv, makeVarNode(k, v, l, rl), rr) ⟢
+  _ → t
+}
+
+λbalanceVar(k: ⌘, v: Z, l: VarTree, r: VarTree): VarTree → (
+  node ≔ makeVarNode(k, v, l, r)
+  b ≔ varBalance(node)
+  ⟡ (b > 1) {
+    ◉ → ⟡ (varBalance(l) < 0) {
+      ◉ → rotateVarRight(makeVarNode(k, v, rotateVarLeft(l), r)) ⟢
+      ◎ → rotateVarRight(node)
+    } ⟢
+    ◎ → ⟡ (b < 0 ☠︎ 1) {
+      ◉ → ⟡ (varBalance(r) > 0) {
+        ◉ → rotateVarLeft(makeVarNode(k, v, l, rotateVarRight(r))) ⟢
+        ◎ → rotateVarLeft(node)
+      } ⟢
+      ◎ → node
+    }
+  }
+)
+
+λinsertVar(k: ⌘, v: Z, t: VarTree): VarTree → ⟡ t {
+  VarLeaf → VarNode(k, v, VarLeaf, VarLeaf, 1) ⟢
+  VarNode(key, val, l, r, h) → ⟡ (k ≡ key) {
+    ◉ → VarNode(k, v, l, r, h) ⟢
+    ◎ → ⟡ (k < key) {
+      ◉ → balanceVar(key, val, insertVar(k, v, l), r) ⟢
+      ◎ → balanceVar(key, val, l, insertVar(k, v, r))
+    }
+  }
+}
+
+λlookupVar(name: ⌘, vars: VarTree): Optional ▷ Z → ⟡ vars {
+  VarLeaf → ⦰ ⟢
+  VarNode(k, v, l, r, h) → ⟡ (name ≡ k) {
+    ◉ → ⧫(v) ⟢
+    ◎ → ⟡ (name < k) {
+      ◉ → lookupVar(name, l) ⟢
+      ◎ → lookupVar(name, r)
+    }
+  }
+}
+
+λfuncHeight(t: FuncTree): ⟁ → ⟡ t {
+  FuncLeaf → 0 ⟢
+  FuncNode(k, f, l, r, h) → h
+}
+
+λmakeFuncNode(k: ⌘, f: Func, l: FuncTree, r: FuncTree): FuncTree →
+  FuncNode(k, f, l, r, 1 ✚ maxH(funcHeight(l), funcHeight(r)))
+
+λfuncBalance(t: FuncTree): ⟁ → ⟡ t {
+  FuncLeaf → 0 ⟢
+  FuncNode(k, f, l, r, h) → funcHeight(l) ☠︎ funcHeight(r)
+}
+
+λrotateFuncRight(t: FuncTree): FuncTree → ⟡ t {
+  FuncNode(k, f, FuncNode(lk, lf, ll, lr, lh), r, h) →
+    makeFuncNode(lk, lf, ll, makeFuncNode(k, f, lr, r)) ⟢
+  _ → t
+}
+
+λrotateFuncLeft(t: FuncTree): FuncTree → ⟡ t {
+  FuncNode(k, f, l, FuncNode(rk, rf, rl, rr, rh), h) →
+    makeFuncNode(rk, rf, makeFuncNode(k, f, l, rl), rr) ⟢
+  _ → t
+}
+
+λbalanceFunc(k: ⌘, f: Func, l: FuncTree, r: FuncTree): FuncTree → (
+  node ≔ makeFuncNode(k, f, l, r)
+  b ≔ funcBalance(node)
+  ⟡ (b > 1) {
+    ◉ → ⟡ (funcBalance(l) < 0) {
+      ◉ → rotateFuncRight(makeFuncNode(k, f, rotateFuncLeft(l), r)) ⟢
+      ◎ → rotateFuncRight(node)
+    } ⟢
+    ◎ → ⟡ (b < 0 ☠︎ 1) {
+      ◉ → ⟡ (funcBalance(r) > 0) {
+        ◉ → rotateFuncLeft(makeFuncNode(k, f, l, rotateFuncRight(r))) ⟢
+        ◎ → rotateFuncLeft(node)
+      } ⟢
+      ◎ → node
+    }
+  }
+)
+
+λinsertFunc(k: ⌘, f: Func, t: FuncTree): FuncTree → ⟡ t {
+  FuncLeaf → FuncNode(k, f, FuncLeaf, FuncLeaf, 1) ⟢
+  FuncNode(key, fn, l, r, h) → ⟡ (k ≡ key) {
+    ◉ → FuncNode(k, f, l, r, h) ⟢
+    ◎ → ⟡ (k < key) {
+      ◉ → balanceFunc(key, fn, insertFunc(k, f, l), r) ⟢
+      ◎ → balanceFunc(key, fn, l, insertFunc(k, f, r))
+    }
+  }
+}
+
+λlookupFunc(name: ⌘, funcs: FuncTree): Optional ▷ Func → ⟡ funcs {
+  FuncLeaf → ⦰ ⟢
+  FuncNode(k, f, l, r, h) → ⟡ (name ≡ k) {
+    ◉ → ⧫(f) ⟢
+    ◎ → ⟡ (name < k) {
+      ◉ → lookupFunc(name, l) ⟢
+      ◎ → lookupFunc(name, r)
+    }
+  }
+}
+
+// `calls` counts the nested function calls of the running evaluation: the
+// host would happily run `(def f (n) (f n)) (f 1)` forever, tail calls
+// being free, so the evaluator bounds it itself.
+Ctx ≔ { vars: VarTree ⟢ funcs: FuncTree ⟢ calls: ⟁ }
+
+λcallLimit(u: ∅): ⟁ → 10000
+
+// ── names ─────────────────────────────────────────────────────
+
+λisDigit(c: ⌘): ○ → c ≥ "0" ∧ c ≤ "9"
+
+λallDigits(cs: List ▷ ⌘): ○ → ⟡ cs {
+  ⊘ → ◉ ⟢
+  ⁝(c, tl) → isDigit(c) ∧ allDigits(tl)
+}
+
+// Digits, with an optional leading sign (`-5`, `+7`); a lone sign is a name.
+λisNumber(a: ⌘): ○ → ⟡ (⊢("-")(a) ∨ ⊢("+")(a)) {
+  ◉ → ⍴(a) > 1 ∧ allDigits(⍂(⊏(1)(⍴(a) ☠︎ 1)(a))) ⟢
+  ◎ → ⍴(a) > 0 ∧ allDigits(⍂(a))
+}
+
+λfromBool(b: ○): Z → ⟡ b {
+  ◉ → fromMachine(1) ⟢
+  ◎ → zero(∅)
+}
+
+λtoSmall(n: Z, what: ⌘): ⟁ → ⟡ toMachine(n) {
+  ⧫(v) → v ⟢
+  ⦰ → ☄ Failure("eval", what ✚ " is too large")
+}
+
+// ── evaluation ────────────────────────────────────────────────
+
+λevalAll(items: List ▷ Sx, ctx: Ctx): List ▷ Z → ⟡ items {
+  ⊘ → ⊘ ⟢
+  ⁝(h, tl) → ⁝(eval(h, ctx), evalAll(tl, ctx))
+}
+
+λeval(x: Sx, ctx: Ctx): Z →⟳ ⟡ x {
+  Atom(a) → ⟡ isNumber(a) {
+    ◉ → parse(a) ⟢
+    ◎ → ⟡ lookupVar(a, ctx.vars) {
+      ⧫(v) → v ⟢
+      ⦰ → ☄ Failure("eval", "unbound name '" ✚ a ✚ "'")
+    }
+  } ⟢
+  Node(items) → ⟡ items {
+    ⊘ → ☄ Failure("eval", "empty form ()") ⟢
+    ⁝(head, args) → ⟡ head {
+      Atom(op) → apply(op, args, ctx) ⟢
+      Node(inner) → ☄ Failure("eval", "cannot call " ✚ render(head))
+    }
+  }
+}
+
+λapply(op: ⌘, args: List ▷ Sx, ctx: Ctx): Z → ⟡ (op ≡ "if") {
+  ◉ → evalIf(args, ctx) ⟢
+  ◎ → ⟡ (op ≡ "let") {
+    ◉ → evalLet(args, ctx) ⟢
+    ◎ → ⟡ lookupFunc(op, ctx.funcs) {
+      ⧫(f) → callFunc(f, evalAll(args, ctx), ctx) ⟢
+      ⦰ → primitive(op, evalAll(args, ctx))
+    }
+  }
+}
+
+λevalIf(args: List ▷ Sx, ctx: Ctx): Z → ⟡ args {
+  ⁝(c, ⁝(t, ⁝(e, ⊘))) → ⟡ (sign(eval(c, ctx)) ≡ 0) {
+    ◉ → eval(e, ctx) ⟢
+    ◎ → eval(t, ctx)
+  } ⟢
+  _ → ☄ Failure("eval", "if needs a condition, a then and an else")
+}
+
+λevalLet(args: List ▷ Sx, ctx: Ctx): Z → ⟡ args {
+  ⁝(Atom(name), ⁝(v, ⁝(body, ⊘))) → (
+    value ≔ eval(v, ctx)
+    eval(body, Ctx { vars: insertVar(name, value, ctx.vars) ⟢ funcs: ctx.funcs ⟢ calls: ctx.calls })
+  ) ⟢
+  _ → ☄ Failure("eval", "let needs a name, a value and a body")
+}
+
+λbind(params: List ▷ ⌘, values: List ▷ Z, acc: VarTree, fname: ⌘): VarTree → ⟡ params {
+  ⊘ → ⟡ values {
+    ⊘ → acc ⟢
+    ⁝(v, vt) → ☄ Failure("eval", fname ✚ " called with too many arguments")
+  } ⟢
+  ⁝(p, pt) → ⟡ values {
+    ⊘ → ☄ Failure("eval", fname ✚ " called with too few arguments") ⟢
+    ⁝(v, vt) → bind(pt, vt, insertVar(p, v, acc), fname)
+  }
+}
+
+// A call sees its parameters only: no dynamic scope.
+λcallFunc(f: Func, values: List ▷ Z, ctx: Ctx): Z → ⟡ (ctx.calls ≥ callLimit(∅)) {
+  ◉ → ☄ Failure("eval", "recursion deeper than " ✚ ⍕(callLimit(∅)) ✚ " calls in '" ✚ f.fname ✚ "'") ⟢
+  ◎ → eval(f.body, Ctx { vars: bind(f.params, values, VarLeaf, f.fname) ⟢ funcs: ctx.funcs ⟢ calls: ctx.calls ✚ 1 })
+}
+
+λprimitive(op: ⌘, values: List ▷ Z): Z → ⟡ values {
+  ⁝(a, ⊘) → unary(op, a) ⟢
+  ⁝(a, ⁝(b, ⊘)) → binary(op, a, b) ⟢
+  _ → ☄ Failure("eval", "unknown function '" ✚ op ✚ "' (or wrong argument count)")
+}
+
+λbinary(op: ⌘, a: Z, b: Z): Z → ⟡ (op ≡ "add") {
+  ◉ → plus(a, b) ⟢
+  ◎ → ⟡ (op ≡ "sub") {
+    ◉ → subtract(a, b) ⟢
+    ◎ → ⟡ (op ≡ "mul") {
+      ◉ → multiply(a, b) ⟢
+      ◎ → ⟡ (op ≡ "div") {
+        ◉ → quotientOf(a, b) ⟢
+        ◎ → ⟡ (op ≡ "mod") {
+          ◉ → remainderOf(a, b) ⟢
+          ◎ → ⟡ (op ≡ "pow") {
+            ◉ → power(a, exponentOf(b)) ⟢
+            ◎ → ⟡ (op ≡ "eq") {
+              ◉ → fromBool(cmp(a, b) ≡ 0) ⟢
+              ◎ → ⟡ (op ≡ "lt") {
+                ◉ → fromBool(cmp(a, b) < 0) ⟢
+                ◎ → ☄ Failure("eval", "unknown function '" ✚ op ✚ "'")
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+λquotientOf(a: Z, b: Z): Z → ⟡ divide(a, b) {
+  ⁝(q, rest) → q ⟢
+  ⊘ → zero(∅)
+}
+
+λremainderOf(a: Z, b: Z): Z → ⟡ divide(a, b) {
+  ⁝(q, ⁝(r, rest)) → r ⟢
+  _ → zero(∅)
+}
+
+λexponentOf(b: Z): ⟁ → ⟡ isNegative(b) {
+  ◉ → ☄ Failure("eval", "exponent must not be negative") ⟢
+  ◎ → toSmall(b, "exponent")
+}
+
+λunary(op: ⌘, a: Z): Z → ⟡ (op ≡ "neg") {
+  ◉ → neg(a) ⟢
+  ◎ → ⟡ (op ≡ "abs") {
+    ◉ → abs(a) ⟢
+    ◎ → ☄ Failure("eval", "unknown function '" ✚ op ✚ "' (or wrong argument count)")
+  }
+}
+
+// ── programs ──────────────────────────────────────────────────
+
+λparamNames(items: List ▷ Sx): List ▷ ⌘ → ⟡ items {
+  ⊘ → ⊘ ⟢
+  ⁝(Atom(p), tl) → ⁝(p, paramNames(tl)) ⟢
+  ⁝(Node(n), tl) → ☄ Failure("syntax", "a parameter must be a name")
+}
+
+// Registers every `(def …)` in order; returns the other forms.
+λcollect(forms: List ▷ Sx, funcs: FuncTree): Ctx → ⟡ forms {
+  ⊘ → Ctx { vars: VarLeaf ⟢ funcs: funcs ⟢ calls: 0 } ⟢
+  ⁝(f, tl) → ⟡ f {
+    Node(⁝(Atom(kw), ⁝(Atom(name), ⁝(Node(ps), ⁝(body, ⊘))))) → ⟡ (kw ≡ "def") {
+      ◉ → collect(tl, insertFunc(name, Func { fname: name ⟢ params: paramNames(ps) ⟢ body: body }, funcs)) ⟢
+      ◎ → collect(tl, funcs)
+    } ⟢
+    _ → collect(tl, funcs)
+  }
+}
+
+λisDef(f: Sx): ○ → ⟡ f {
+  Node(⁝(Atom(kw), more)) → kw ≡ "def" ⟢
+  _ → ◎
+}
+
+λexpressions(forms: List ▷ Sx): List ▷ Sx → ⟡ forms {
+  ⊘ → ⊘ ⟢
+  ⁝(f, tl) → ⟡ isDef(f) {
+    ◉ → expressions(tl) ⟢
+    ◎ → ⁝(f, expressions(tl))
+  }
+}
+
+λevalEach(exprs: List ▷ Sx, ctx: Ctx): List ▷ ⌘ → ⟡ exprs {
+  ⊘ → ⊘ ⟢
+  ⁝(e, tl) → ⁝(show(eval(e, ctx)), evalEach(tl, ctx))
+}
+
+// The value of each non-definition form, as decimal text.
+λrunProgram(text: ⌘): List ▷ ⌘ →⟳ (
+  forms ≔ parseProgram(text)
+  ctx ≔ collect(forms, FuncLeaf)
+  exprs ≔ expressions(forms)
+  ⟡ exprs {
+    ⊘ → ☄ Failure("eval", "the program has no expression to evaluate") ⟢
+    ⁝(h, tl) → evalEach(exprs, ctx)
+  }
+)
+❧
