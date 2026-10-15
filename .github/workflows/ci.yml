@@ -48,9 +48,16 @@ jobs:
         uses: taiki-e/install-action@183e4297cca2404691e9380e1307288dced5c82a # v2.87.25
         with:
           tool: just@1.57.0
-      - name: Install obfusku
+      - name: Install obfusku (Unix)
+        if: runner.os != 'Windows'
         run: |
           curl -fsSL "https://raw.githubusercontent.com/core-red-project/obfusku/v${OBFUSKU_VERSION}/install.sh" | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install obfusku (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm "https://raw.githubusercontent.com/core-red-project/obfusku/v$env:OBFUSKU_VERSION/install.ps1" | iex
+          echo "$HOME\.local\bin" >> $env:GITHUB_PATH
       - run: just install
       - run: just check

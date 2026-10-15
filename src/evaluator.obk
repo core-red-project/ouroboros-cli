@@ -20,15 +20,9 @@ Func ≔ { fname: ⌘ ⟢ params: List ▷ ⌘ ⟢ body: Sx }
 
 // ── balanced environments (persistent AVL trees) ─────────────
 
-VarTree ≔ {
-  VarLeaf ⟢
-  VarNode(⌘, Z, VarTree, VarTree, ⟁)
-}
+VarTree ≔ { VarLeaf ⟢ VarNode(⌘, Z, VarTree, VarTree, ⟁) }
 
-FuncTree ≔ {
-  FuncLeaf ⟢
-  FuncNode(⌘, Func, FuncTree, FuncTree, ⟁)
-}
+FuncTree ≔ { FuncLeaf ⟢ FuncNode(⌘, Func, FuncTree, FuncTree, ⟁) }
 
 λmaxH(a: ⟁, b: ⟁): ⟁ → ⟡ (a > b) {
   ◉ → a ⟢
@@ -40,8 +34,7 @@ FuncTree ≔ {
   VarNode(k, v, l, r, h) → h
 }
 
-λmakeVarNode(k: ⌘, v: Z, l: VarTree, r: VarTree): VarTree →
-  VarNode(k, v, l, r, 1 ✚ maxH(varHeight(l), varHeight(r)))
+λmakeVarNode(k: ⌘, v: Z, l: VarTree, r: VarTree): VarTree → VarNode(k, v, l, r, 1 ✚ maxH(varHeight(l), varHeight(r)))
 
 λvarBalance(t: VarTree): ⟁ → ⟡ t {
   VarLeaf → 0 ⟢
@@ -49,14 +42,12 @@ FuncTree ≔ {
 }
 
 λrotateVarRight(t: VarTree): VarTree → ⟡ t {
-  VarNode(k, v, VarNode(lk, lv, ll, lr, lh), r, h) →
-    makeVarNode(lk, lv, ll, makeVarNode(k, v, lr, r)) ⟢
+  VarNode(k, v, VarNode(lk, lv, ll, lr, lh), r, h) → makeVarNode(lk, lv, ll, makeVarNode(k, v, lr, r)) ⟢
   _ → t
 }
 
 λrotateVarLeft(t: VarTree): VarTree → ⟡ t {
-  VarNode(k, v, l, VarNode(rk, rv, rl, rr, rh), h) →
-    makeVarNode(rk, rv, makeVarNode(k, v, l, rl), rr) ⟢
+  VarNode(k, v, l, VarNode(rk, rv, rl, rr, rh), h) → makeVarNode(rk, rv, makeVarNode(k, v, l, rl), rr) ⟢
   _ → t
 }
 
@@ -105,8 +96,7 @@ FuncTree ≔ {
   FuncNode(k, f, l, r, h) → h
 }
 
-λmakeFuncNode(k: ⌘, f: Func, l: FuncTree, r: FuncTree): FuncTree →
-  FuncNode(k, f, l, r, 1 ✚ maxH(funcHeight(l), funcHeight(r)))
+λmakeFuncNode(k: ⌘, f: Func, l: FuncTree, r: FuncTree): FuncTree → FuncNode(k, f, l, r, 1 ✚ maxH(funcHeight(l), funcHeight(r)))
 
 λfuncBalance(t: FuncTree): ⟁ → ⟡ t {
   FuncLeaf → 0 ⟢
@@ -114,14 +104,12 @@ FuncTree ≔ {
 }
 
 λrotateFuncRight(t: FuncTree): FuncTree → ⟡ t {
-  FuncNode(k, f, FuncNode(lk, lf, ll, lr, lh), r, h) →
-    makeFuncNode(lk, lf, ll, makeFuncNode(k, f, lr, r)) ⟢
+  FuncNode(k, f, FuncNode(lk, lf, ll, lr, lh), r, h) → makeFuncNode(lk, lf, ll, makeFuncNode(k, f, lr, r)) ⟢
   _ → t
 }
 
 λrotateFuncLeft(t: FuncTree): FuncTree → ⟡ t {
-  FuncNode(k, f, l, FuncNode(rk, rf, rl, rr, rh), h) →
-    makeFuncNode(rk, rf, makeFuncNode(k, f, l, rl), rr) ⟢
+  FuncNode(k, f, l, FuncNode(rk, rf, rl, rr, rh), h) → makeFuncNode(rk, rf, makeFuncNode(k, f, l, rl), rr) ⟢
   _ → t
 }
 
